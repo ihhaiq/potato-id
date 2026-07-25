@@ -8,9 +8,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Dict
 from urllib.parse import quote
+
 import aiohttp
 from dotenv import load_dotenv
+
+# يحمّل متغيرات البيئة من ملف .env الموجود بنفس مجلد هذا السكربت (إذا موجود)
+# ويحطها بـos.environ، عشان os.getenv() تقدر تلقاها. لازم يصير هذا قبل أي
+# قراءة لـos.getenv بالملف.
 load_dotenv()
+
 from aiogram import BaseMiddleware, Bot, Dispatcher, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
@@ -42,6 +48,9 @@ from pydantic import ValidationError
 logging.basicConfig(level=logging.INFO)
 
 # ==================== 1) التوكن — لازم فقط env variable ====================
+# ⚠️ ما نحط التوكن هنا بالكود إطلاقاً. لو كان عندك توكن مكتوب هنا بنسخة
+# سابقة من هذا الملف، اعتبره مكشوف وسوي /revoke له فوراً من BotFather
+# وولّد توكن جديد.
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError(
@@ -73,6 +82,9 @@ CONFIG_PATH = Path(__file__).parent / "bot_config.json"
 
 # مهلة انتظار رد بوت الـ Group Help (بالثواني) قبل ما نكمل ونرسل الرسالة الغنية بدونه
 GH_REPLY_TIMEOUT = 8
+
+# 4) حد أقصى لعدد طلبات الـ GH المعلقة بنفس الوقت (حماية من تراكم لا نهائي
+# لو صار البوت الخارجي بطيء أو متوقف)
 MAX_GH_PENDING = 50
 
 # نرسل تنبيهات الأخطاء لأول آيدي بـADMIN_IDS. لو تريد شخص محدد بس يستلمها،
@@ -342,7 +354,12 @@ async def build_profile_rich_message(
         ]
     )
 
-    heading_text = warning_heading or f"📸 {user.full_name} pfp "
+    if warning_heading:
+        heading_text = warning_heading
+    elif photos.total_count == 0:
+        heading_text = "YOU DONT HAVE ONE !."
+    else:
+        heading_text = f"📸 {user.full_name} pfp "
 
     blocks: list = [
         InputRichBlockSectionHeading(text=heading_text, size=2),
@@ -1606,12 +1623,10 @@ async def main():
             "روح لـ BotFather -> /mybots -> اختار بوتك -> Bot Settings -> فعّل Guest Mode",
             me.username,
         )
-
     if ADMIN_IDS == {123456789}:
         logging.warning(
             "⚠️ ما عدلت ADMIN_IDS لهسه! اكتب /myid بالبوت وحط آيديك الحقيقي بالكود."
         )
-
     if not getattr(me, "can_manage_bots", False):
         logging.warning(
             "⚠️ Bot Management Mode غير مفعّل عند البوت (@%s)! ميزة /mybot ما "
@@ -1619,11 +1634,7 @@ async def main():
             "Settings -> Bot Management Mode -> Enable.",
             me.username,
         )
-
     await start_saved_managed_bot_workers()
-
     await safe_polling(bot, dp)
-
-
 if __name__ == "__main__":
     asyncio.run(main())
