@@ -316,6 +316,7 @@ async def build_profile_rich_message(
     external_field: tuple[str, str] | None = None,
     include_photos: bool = True,
     warning_heading: str | None = None,
+    extra_footer_text: str | None = None,
 ) -> InputRichMessage:
     """
     يبني رسالة غنية (عنوان + Details/Toggle فيه معلومات المستخدم + ألبوم صور
@@ -375,6 +376,9 @@ async def build_profile_rich_message(
             )
         blocks.append(InputRichBlockSlideshow(blocks=photo_blocks))
 
+    if extra_footer_text:
+        blocks.append(InputRichBlockParagraph(text=extra_footer_text))
+
     return InputRichMessage(blocks=blocks)
 
 
@@ -385,37 +389,99 @@ def _is_photos_forbidden_error(exc: TelegramBadRequest) -> bool:
     return "CHAT_SEND_PHOTOS_FORBIDDEN" in str(exc)
 
 
+def _is_photo_invalid_error(exc: TelegramBadRequest) -> bool:
+    return "RICH_MESSAGE_PHOTO_INVALID" in str(exc)
+
+
+def _is_recoverable_photo_error(exc: TelegramBadRequest) -> bool:
+    return _is_photos_forbidden_error(exc) or _is_photo_invalid_error(exc)
+
+
+def _fallback_heading_for(exc: TelegramBadRequest) -> str:
+    if _is_photos_forbidden_error(exc):
+        return PHOTOS_FORBIDDEN_HEADING
+    return "⚠️ تعذر تحميل صورة البروفايل، جرب مرة ثانية بعدين"
+
+
+def build_message_link(
+    chat_id: int | None, chat_username: str | None, message_id: int | None
+) -> str | None:
+    """يبني رابط مباشر للرسالة الأصلية (لو متوفر chat_id وmessage_id).
+    لو الكروب إله يوزرنيم عام نستخدمه، وإلا نستخدم صيغة t.me/c/ (تشتغل بس
+    لأعضاء الكروب لأنه خاص)."""
+    if not message_id or not chat_id:
+        return None
+    if chat_username:
+        return f"https://t.me/{chat_username}/{message_id}"
+    cid = str(chat_id)
+    if cid.startswith("-100"):
+        cid = cid[4:]
+    elif cid.startswith("-"):
+        cid = cid[1:]
+    return f"https://t.me/c/{cid}/{message_id}"
+
+
+def build_error_context_footer(
+    chat_id: int | None, chat_username: str | None, message_id: int | None, user
+) -> str | None:
+    """يبني سطر إضافي فيه رابط الرسالة الأصلية اللي صار فيها الخطأ + يوزر
+    المستخدم المتأثر، عشان يسهل تتبع وين ولمين صار الخطأ بالضبط."""
+    parts = []
+    link = build_message_link(chat_id, chat_username, message_id)
+    if link:
+        parts.append(f"🔗 الرسالة الأصلية: {link}")
+    username = getattr(user, "username", None)
+    who = f"@{username}" if username else f"ID {getattr(user, 'id', '؟')}"
+    parts.append(f"👤 المستخدم: {who}")
+    return "\n".join(parts)
+
+
 async def send_rich_profile(
     bot_instance: Bot,
     chat_id: int,
     user,
     external_field: tuple[str, str] | None = None,
+    context_chat_username: str | None = None,
+    context_message_id: int | None = None,
 ) -> None:
     """يبني ويرسل الرسالة الغنية لبروفايل مستخدم بـsend_rich_message عادي،
-    ولو المجموعة مقيدة من إرسال الصور يرسلها بديل بدون صور مع تحذير بالعنوان."""
+    ولو المجموعة مقيدة من إرسال الصور (أو صارت مشكلة بالصورة نفسها) يرسلها
+    بديل بدون صور مع تحذير بالعنوان، ورابط الرسالة الأصلية + يوزر المستخدم
+    المتأثر بالأسفل (لو متوفرين context_chat_username/context_message_id)."""
     rich_message = await build_profile_rich_message(bot_instance, user, external_field=external_field)
     try:
         await bot_instance.send_rich_message(
             chat_id=chat_id, rich_message=rich_message, reply_markup=dev_keyboard()
         )
     except TelegramBadRequest as e:
-        if not _is_photos_forbidden_error(e):
+        if not _is_recoverable_photo_error(e):
             raise
+        footer = build_error_context_footer(chat_id, context_chat_username, context_message_id, user)
         fallback = await build_profile_rich_message(
             bot_instance,
             user,
             external_field=external_field,
             include_photos=False,
-            warning_heading=PHOTOS_FORBIDDEN_HEADING,
+            warning_heading=_fallback_heading_for(e),
+            extra_footer_text=footer,
         )
         await bot_instance.send_rich_message(
             chat_id=chat_id, rich_message=fallback, reply_markup=dev_keyboard()
         )
 
 
-async def answer_guest_query_with_profile(bot_instance: Bot, guest_query_id: str, caller) -> None:
+async def answer_guest_query_with_profile(
+    bot_instance: Bot,
+    guest_query_id: str,
+    caller,
+    context_chat_id: int | None = None,
+    context_chat_username: str | None = None,
+    context_message_id: int | None = None,
+) -> None:
     """يبني ويرد بالرسالة الغنية لبروفايل المستخدم اللي منشن البوت بوضع
-    الضيف، ولو المجموعة مقيدة من إرسال الصور يرد ببديل بدون صور مع تحذير."""
+    الضيف، ولو المجموعة مقيدة من إرسال الصور (أو صارت مشكلة بالصورة نفسها)
+    يرد ببديل بدون صور مع تحذير + رابط الرسالة الأصلية ويوزر المستخدم
+    المتأثر (لو متوفرين context_chat_id/context_chat_username/context_message_id)."""
     rich_message = await build_profile_rich_message(bot_instance, caller)
     try:
         await bot_instance.answer_guest_query(
@@ -428,13 +494,17 @@ async def answer_guest_query_with_profile(bot_instance: Bot, guest_query_id: str
             ),
         )
     except TelegramBadRequest as e:
-        if not _is_photos_forbidden_error(e):
+        if not _is_recoverable_photo_error(e):
             raise
+        footer = build_error_context_footer(
+            context_chat_id, context_chat_username, context_message_id, caller
+        )
         fallback = await build_profile_rich_message(
             bot_instance,
             caller,
             include_photos=False,
-            warning_heading=PHOTOS_FORBIDDEN_HEADING,
+            warning_heading=_fallback_heading_for(e),
+            extra_footer_text=footer,
         )
         await bot_instance.answer_guest_query(
             guest_query_id=guest_query_id,
@@ -481,7 +551,14 @@ async def alias_start(message: Message):
 async def send_profile_rich_message(message: Message):
     user = message.from_user
     external_field = await fetch_external_bot_field(message)
-    await send_rich_profile(bot, message.chat.id, user, external_field=external_field)
+    await send_rich_profile(
+        bot,
+        message.chat.id,
+        user,
+        external_field=external_field,
+        context_chat_username=message.chat.username,
+        context_message_id=message.message_id,
+    )
 
 
 @dp.message(Command("id"))
@@ -584,7 +661,14 @@ async def handle_guest_mention(message: Message):
     if caller is None:
         return
 
-    await answer_guest_query_with_profile(bot, message.guest_query_id, caller)
+    await answer_guest_query_with_profile(
+        bot,
+        message.guest_query_id,
+        caller,
+        context_chat_id=message.chat.id if message.chat else None,
+        context_chat_username=message.chat.username if message.chat else None,
+        context_message_id=message.message_id,
+    )
 
 
 # ==================== نظام البوتات المُدارة (Managed Bots) ====================
@@ -782,7 +866,13 @@ async def handle_managed_child_update(
                 return
 
             if is_id:
-                await send_rich_profile(child_bot, chat_id, user_obj)
+                await send_rich_profile(
+                    child_bot,
+                    chat_id,
+                    user_obj,
+                    context_chat_username=(message.get("chat") or {}).get("username"),
+                    context_message_id=message.get("message_id"),
+                )
                 return
 
             if is_secret:
@@ -820,7 +910,15 @@ async def handle_managed_child_update(
             )
             if caller.id is None:
                 return
-            await answer_guest_query_with_profile(child_bot, guest_message["guest_query_id"], caller)
+            guest_chat = guest_message.get("chat") or {}
+            await answer_guest_query_with_profile(
+                child_bot,
+                guest_message["guest_query_id"],
+                caller,
+                context_chat_id=guest_chat.get("id"),
+                context_chat_username=guest_chat.get("username"),
+                context_message_id=guest_message.get("message_id"),
+            )
             return
 
         if callback_query is not None and callback_query.get("data") == "child_secret":
@@ -1623,10 +1721,12 @@ async def main():
             "روح لـ BotFather -> /mybots -> اختار بوتك -> Bot Settings -> فعّل Guest Mode",
             me.username,
         )
+
     if ADMIN_IDS == {123456789}:
         logging.warning(
             "⚠️ ما عدلت ADMIN_IDS لهسه! اكتب /myid بالبوت وحط آيديك الحقيقي بالكود."
         )
+
     if not getattr(me, "can_manage_bots", False):
         logging.warning(
             "⚠️ Bot Management Mode غير مفعّل عند البوت (@%s)! ميزة /mybot ما "
@@ -1634,7 +1734,11 @@ async def main():
             "Settings -> Bot Management Mode -> Enable.",
             me.username,
         )
+
     await start_saved_managed_bot_workers()
+
     await safe_polling(bot, dp)
+
+
 if __name__ == "__main__":
     asyncio.run(main())
