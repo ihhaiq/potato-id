@@ -1,0 +1,24 @@
+{
+  "texts": {
+    "welcome": "👋 هلا وغلا بيك!\n\nأنا بوت أسوي رسائل غنية بصور بروفايلك.\n\n📌 الأوامر المتوفرة:\n/id — يرسل رسالة غنية بألبوم صور بروفايلك\n/secret — مثال على رسالة مؤقتة",
+    "secret": "Text broken"
+  },
+  "welcome_button": {
+    "text": "Huge HUSSEIN",
+    "url": "https://t.me/ihhai"
+  },
+  "aliases": {
+    "start": [],
+    "id": [
+      "ايدي"
+    ],
+    "secret": []
+  },
+  "external_bot": {
+    "username": null,
+    "command": "/info",
+    "regex": "الرسائل\\s*:\\s*([\\d,]+)",
+    "label": "الرسائل"
+  },
+  "gh_bot_username": "GHSupportGroupsBot"
+}
