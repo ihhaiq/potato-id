@@ -200,13 +200,13 @@ def usage_count_for(user_id: int) -> int:
     return count
 
 
-def _mention_id_line(uid_str: str, name: str) -> list:
-    """يبني سطر 'منشن بالاسم — ID: xxx' بدون الحاجة لكائن مستخدم حقيقي حي،
-    نستخدمه لبناء قائمة /top من بيانات مخزّنة مسبقاً."""
+def _mention_id_line(uid_str: str, name: str, extra: str = "") -> list:
+    """يبني سطر 'منشن بالاسم — ID: xxx — رقم إضافي اختياري' بدون الحاجة
+    لكائن مستخدم حقيقي حي، نستخدمه لبناء قائمة /top من بيانات مخزّنة مسبقاً."""
     fake_user = User(id=int(uid_str), is_bot=False, first_name=name or "مستخدم")
     return [
         RichTextTextMention(text=name or "مستخدم", user=fake_user),
-        f" — ID: {uid_str}\n",
+        f" — ID: {uid_str}{extra}\n",
     ]
 
 
@@ -233,14 +233,16 @@ def build_top_users_rich_message() -> InputRichMessage:
     usage_lines: list = []
     if ranked_by_usage:
         for uid_str, info in ranked_by_usage:
-            usage_lines.extend(_mention_id_line(uid_str, info.get("name", "مستخدم")))
+            count = usage_count_for(int(uid_str))
+            usage_lines.extend(_mention_id_line(uid_str, info.get("name", "مستخدم"), f" — 🔢 {count}"))
     else:
         usage_lines = ["ماكو بيانات لهسه."]
 
     likes_lines: list = []
     if ranked_by_likes:
         for uid_str, _voters in ranked_by_likes:
-            likes_lines.extend(_mention_id_line(uid_str, cached_name(uid_str)))
+            count = likes_count_for(int(uid_str))
+            likes_lines.extend(_mention_id_line(uid_str, cached_name(uid_str), f" — ❤️ {count}"))
     else:
         likes_lines = ["ماكو بيانات لهسه."]
 
@@ -291,7 +293,7 @@ DEFAULT_CONFIG = {
         "start": [],
         "id": [],
         "secret": [],
-        "top": [],
+        "top": ["توب"],
     },
     # ربط بوت خارجي (زي Group Help) نطلب منه أمر ونقرا قيمة من رده بالـregex.
     # كل شي هنا قابل للتعديل من لوحة /admin بدون لمس الكود:
@@ -315,6 +317,13 @@ def load_config() -> dict:
                 data = json.load(f)
             merged = json.loads(json.dumps(DEFAULT_CONFIG))
             merged.update(data)
+            # دمج عميق لقسم aliases تحديداً (مو استبدال كامل): أي أمر جديد
+            # ينضاف مستقبلاً (زي /top) لازم يوصله مفتاحه الافتراضي حتى لو
+            # ملف bot_config.json القديم عندك ما فيه هذا المفتاح أصلاً،
+            # بدون ما يمسح الكلمات اللي أنت ضفتها يدوياً للأوامر الثانية.
+            merged_aliases = json.loads(json.dumps(DEFAULT_CONFIG["aliases"]))
+            merged_aliases.update(data.get("aliases", {}))
+            merged["aliases"] = merged_aliases
             return merged
         except Exception:
             logging.exception("فشل تحميل bot_config.json، رح نستخدم الإعدادات الافتراضية")
@@ -529,6 +538,13 @@ async def build_profile_rich_message(
 
     is_premium = bool(getattr(user, "is_premium", False))
 
+    # RichTextTextMention يحتاج كائن User حقيقي — بالبوت الرئيسي user أصلاً
+    # User حقيقي من أيوجرام، بس بالبوتات الفرعية نبنيه كـSimpleNamespace من
+    # بيانات JSON خام، فنبني نسخة User صالحة له هنا بالحالتين.
+    mention_user = (
+        user if isinstance(user, User) else User(id=user.id, is_bot=False, first_name=user.full_name or "مستخدم")
+    )
+
     # فقرة المعلومات: آيدي قابل للنسخ (RichTextCode) + منشن باسمه (RichTextTextMention)
     # + اليوزرنيم + حالة البريميوم + عدد الصور، وكلها نحطها داخل Details/Toggle block
     info_paragraph = InputRichBlockParagraph(
@@ -537,7 +553,7 @@ async def build_profile_rich_message(
             RichTextCode(text=str(user.id)),
             "\n",
             "👤 Mention: ",
-            RichTextTextMention(text=user.full_name, user=user),
+            RichTextTextMention(text=user.full_name, user=mention_user),
             "\n",
             f"🔗 userName: @{user.username or 'بدون يوزر'}\n",
             f"💎 Premium: {'✅ نعم' if is_premium else '❌ لا'}\n",
