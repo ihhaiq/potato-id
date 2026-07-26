@@ -78,6 +78,44 @@ else:
 
 DEV_BUTTON_TEXT = "Huge Dev"
 DEV_BUTTON_URL = "https://t.me/ihhai"
+
+# ==================== زر القلب التفاعلي (❤️ عداد دائم) ====================
+# عداد واحد مشترك بين البوت الرئيسي وكل البوتات الفرعية (managed bots)،
+# يطلع كزر بجانب زر Huge Dev بكل رسالة غنية، ويزداد كل ما حد يضغطه، ويكمل
+# من نفس الرقم حتى لو البوت انطفى وانرجع اشتغل.
+HEARTS_PATH = Path(__file__).parent / "hearts.json"
+HEARTS_LOCK = asyncio.Lock()
+
+
+def load_hearts() -> dict:
+    if HEARTS_PATH.exists():
+        try:
+            with open(HEARTS_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            logging.exception("فشل تحميل hearts.json، رح نبدأ العداد من الصفر")
+    return {"total": 0, "users": {}}
+
+
+def _write_hearts_sync(data: dict) -> None:
+    tmp_path = HEARTS_PATH.with_suffix(".json.tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, HEARTS_PATH)
+
+
+HEARTS = load_hearts()
+
+
+async def increment_heart(user_id: int) -> int:
+    """يزيد عداد القلوب الكلي وقلوب هذا المستخدم بمقدار وحدة، يحفظ على القرص
+    فوراً (atomic)، ويرجع العداد الكلي الجديد."""
+    async with HEARTS_LOCK:
+        HEARTS["total"] = HEARTS.get("total", 0) + 1
+        users = HEARTS.setdefault("users", {})
+        users[str(user_id)] = users.get(str(user_id), 0) + 1
+        await asyncio.to_thread(_write_hearts_sync, HEARTS)
+        return HEARTS["total"]
 CONFIG_PATH = Path(__file__).parent / "bot_config.json"
 
 # مهلة انتظار رد بوت الـ Group Help (بالثواني) قبل ما نكمل ونرسل الرسالة الغنية بدونه
@@ -174,9 +212,17 @@ def is_admin(user_id: int) -> bool:
 
 
 def dev_keyboard() -> InlineKeyboardMarkup:
-    """كيبورد فيه زر Huge Dev بس (يستخدم بالرسالة الغنية بـ/id ووضع الضيف)."""
+    """كيبورد فيها زر Huge Dev + زر القلب التفاعلي (❤️ + العداد الكلي).
+    تستخدم بكل رسالة غنية (بـ/id ووضع الضيف)، بالبوت الرئيسي وكل البوتات
+    الفرعية، وكلهم يشتركون بنفس عداد hearts.json."""
+    total = HEARTS.get("total", 0)
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=DEV_BUTTON_TEXT, url=DEV_BUTTON_URL)]]
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=DEV_BUTTON_TEXT, url=DEV_BUTTON_URL),
+                InlineKeyboardButton(text=f"❤️ {total}", callback_data="heart_like"),
+            ]
+        ]
     )
 
 
@@ -638,6 +684,17 @@ async def handle_secret_callback(callback: CallbackQuery):
     await callback.answer()
 
 
+@dp.callback_query(F.data == "heart_like")
+async def handle_heart_like(callback: CallbackQuery):
+    """يزيد عداد القلوب ويحدّث نص الزر بنفس الرسالة فوراً بكل مرة يضغطه حد."""
+    await increment_heart(callback.from_user.id)
+    try:
+        await callback.message.edit_reply_markup(reply_markup=dev_keyboard())
+    except Exception:
+        pass  # الرسالة صارت قديمة/محذوفة أو نفس المحتوى (تجاهل بهدوء)
+    await callback.answer("❤️ شكراً!")
+
+
 # ==================== وضع الضيف ====================
 
 def is_explicit_username_mention(message: Message) -> bool:
@@ -918,6 +975,24 @@ async def handle_managed_child_update(
                 context_chat_id=guest_chat.get("id"),
                 context_chat_username=guest_chat.get("username"),
                 context_message_id=guest_message.get("message_id"),
+            )
+            return
+
+        if callback_query is not None and callback_query.get("data") == "heart_like":
+            from_user = callback_query.get("from") or {}
+            uid = from_user.get("id")
+            await increment_heart(uid)
+            cq_message = callback_query.get("message") or {}
+            chat = cq_message.get("chat") or {}
+            msg_id = cq_message.get("message_id")
+            try:
+                await child_bot.edit_message_reply_markup(
+                    chat_id=chat.get("id"), message_id=msg_id, reply_markup=dev_keyboard()
+                )
+            except Exception:
+                pass  # الرسالة صارت قديمة/محذوفة أو نفس المحتوى (تجاهل بهدوء)
+            await child_bot.answer_callback_query(
+                callback_query_id=callback_query["id"], text="❤️ شكراً!"
             )
             return
 
