@@ -79,10 +79,15 @@ else:
 DEV_BUTTON_TEXT = "Huge Dev"
 DEV_BUTTON_URL = "https://t.me/ihhai"
 
-# ==================== زر القلب التفاعلي (❤️ عداد دائم) ====================
-# عداد واحد مشترك بين البوت الرئيسي وكل البوتات الفرعية (managed bots)،
-# يطلع كزر بجانب زر Huge Dev بكل رسالة غنية، ويزداد كل ما حد يضغطه، ويكمل
-# من نفس الرقم حتى لو البوت انطفى وانرجع اشتغل.
+# رقم إضافي يضاف يدوياً على عداد القلوب المعروض (فوق تصويتات المستخدمين
+# الحقيقية) — تتحكم فيه أنت مباشرة بتعديل هذا السطر بس، بدون أي تفاعل
+# بتليجرام. غيّره لأي رقم تريده (0 = بدون أي إضافة).
+DEV_HEARTS_BOOST = 0
+
+# ==================== زر القلب التفاعلي (❤️ تصويت مرة وحدة لكل شخص) ====================
+# كل شخص يكدر يصوّت مرة وحدة بس — يضغط الزر فتنحط له ❤️، ويضغطه مرة ثانية
+# فيتلغي تصويته. العداد المعروض = عدد الأشخاص المصوّتين حالياً (مو عدد
+# الضغطات). مشترك بين البوت الرئيسي وكل البوتات الفرعية، ومحفوظ بشكل دائم.
 HEARTS_PATH = Path(__file__).parent / "hearts.json"
 HEARTS_LOCK = asyncio.Lock()
 
@@ -91,10 +96,16 @@ def load_hearts() -> dict:
     if HEARTS_PATH.exists():
         try:
             with open(HEARTS_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
         except Exception:
-            logging.exception("فشل تحميل hearts.json، رح نبدأ العداد من الصفر")
-    return {"total": 0, "users": {}}
+            logging.exception("فشل تحميل hearts.json، رح نبدأ من الصفر")
+            return {"voters": []}
+        if "voters" not in data:
+            # ترحيل تلقائي من صيغة قديمة (عداد بدون حد للشخص الوحد) لصيغة
+            # التصويت الجديدة — كل شخص كان تفاعل قبل يتحسب مصوّت حالياً.
+            data = {"voters": list(data.get("users", {}).keys())}
+        return data
+    return {"voters": []}
 
 
 def _write_hearts_sync(data: dict) -> None:
@@ -107,15 +118,22 @@ def _write_hearts_sync(data: dict) -> None:
 HEARTS = load_hearts()
 
 
-async def increment_heart(user_id: int) -> int:
-    """يزيد عداد القلوب الكلي وقلوب هذا المستخدم بمقدار وحدة، يحفظ على القرص
-    فوراً (atomic)، ويرجع العداد الكلي الجديد."""
+async def toggle_heart(user_id: int) -> tuple[int, bool]:
+    """يبدّل تصويت المستخدم: لو ما صوّت من قبل يسجّله (يزيد العداد)، ولو كان
+    مصوّت يلغي تصويته (ينقص العداد). يحفظ فوراً على القرص (atomic).
+    يرجع (العداد الكلي الجديد, هل المستخدم مصوّت الحين)."""
     async with HEARTS_LOCK:
-        HEARTS["total"] = HEARTS.get("total", 0) + 1
-        users = HEARTS.setdefault("users", {})
-        users[str(user_id)] = users.get(str(user_id), 0) + 1
+        voters = set(HEARTS.get("voters", []))
+        uid = str(user_id)
+        if uid in voters:
+            voters.discard(uid)
+            voted_now = False
+        else:
+            voters.add(uid)
+            voted_now = True
+        HEARTS["voters"] = list(voters)
         await asyncio.to_thread(_write_hearts_sync, HEARTS)
-        return HEARTS["total"]
+        return len(voters), voted_now
 CONFIG_PATH = Path(__file__).parent / "bot_config.json"
 
 # مهلة انتظار رد بوت الـ Group Help (بالثواني) قبل ما نكمل ونرسل الرسالة الغنية بدونه
@@ -215,7 +233,7 @@ def dev_keyboard() -> InlineKeyboardMarkup:
     """كيبورد فيها زر Huge Dev + زر القلب التفاعلي (❤️ + العداد الكلي).
     تستخدم بكل رسالة غنية (بـ/id ووضع الضيف)، بالبوت الرئيسي وكل البوتات
     الفرعية، وكلهم يشتركون بنفس عداد hearts.json."""
-    total = HEARTS.get("total", 0)
+    total = len(HEARTS.get("voters", [])) + DEV_HEARTS_BOOST
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -686,10 +704,10 @@ async def handle_secret_callback(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "heart_like")
 async def handle_heart_like(callback: CallbackQuery):
-    """يزيد عداد القلوب ويحدّث نص الزر بنفس الرسالة فوراً بكل مرة يضغطه حد.
+    """يبدّل تصويت هذا المستخدم (تصويت/إلغاء تصويت) ويحدّث نص الزر فوراً.
     رسائل وضع الضيف (guest mode) تترسل بآلية Inline Query، فتعديلها يصير
     بـinline_message_id بس، مو بـchat_id/message_id العاديين."""
-    await increment_heart(callback.from_user.id)
+    _, voted_now = await toggle_heart(callback.from_user.id)
     try:
         if callback.inline_message_id:
             await bot.edit_message_reply_markup(
@@ -699,7 +717,7 @@ async def handle_heart_like(callback: CallbackQuery):
             await callback.message.edit_reply_markup(reply_markup=dev_keyboard())
     except Exception:
         pass  # الرسالة صارت قديمة/محذوفة أو نفس المحتوى (تجاهل بهدوء)
-    await callback.answer("❤️ شكراً!")
+    await callback.answer("❤️ شكراً على تصويتك!" if voted_now else "💔 تم إلغاء تصويتك")
 
 
 # ==================== وضع الضيف ====================
@@ -988,7 +1006,7 @@ async def handle_managed_child_update(
         if callback_query is not None and callback_query.get("data") == "heart_like":
             from_user = callback_query.get("from") or {}
             uid = from_user.get("id")
-            await increment_heart(uid)
+            _, voted_now = await toggle_heart(uid)
             inline_message_id = callback_query.get("inline_message_id")
             try:
                 if inline_message_id:
@@ -1006,7 +1024,8 @@ async def handle_managed_child_update(
             except Exception:
                 pass  # الرسالة صارت قديمة/محذوفة أو نفس المحتوى (تجاهل بهدوء)
             await child_bot.answer_callback_query(
-                callback_query_id=callback_query["id"], text="❤️ شكراً!"
+                callback_query_id=callback_query["id"],
+                text="❤️ شكراً على تصويتك!" if voted_now else "💔 تم إلغاء تصويتك",
             )
             return
 
