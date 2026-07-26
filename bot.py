@@ -686,10 +686,17 @@ async def handle_secret_callback(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "heart_like")
 async def handle_heart_like(callback: CallbackQuery):
-    """يزيد عداد القلوب ويحدّث نص الزر بنفس الرسالة فوراً بكل مرة يضغطه حد."""
+    """يزيد عداد القلوب ويحدّث نص الزر بنفس الرسالة فوراً بكل مرة يضغطه حد.
+    رسائل وضع الضيف (guest mode) تترسل بآلية Inline Query، فتعديلها يصير
+    بـinline_message_id بس، مو بـchat_id/message_id العاديين."""
     await increment_heart(callback.from_user.id)
     try:
-        await callback.message.edit_reply_markup(reply_markup=dev_keyboard())
+        if callback.inline_message_id:
+            await bot.edit_message_reply_markup(
+                inline_message_id=callback.inline_message_id, reply_markup=dev_keyboard()
+            )
+        elif callback.message:
+            await callback.message.edit_reply_markup(reply_markup=dev_keyboard())
     except Exception:
         pass  # الرسالة صارت قديمة/محذوفة أو نفس المحتوى (تجاهل بهدوء)
     await callback.answer("❤️ شكراً!")
@@ -982,13 +989,20 @@ async def handle_managed_child_update(
             from_user = callback_query.get("from") or {}
             uid = from_user.get("id")
             await increment_heart(uid)
-            cq_message = callback_query.get("message") or {}
-            chat = cq_message.get("chat") or {}
-            msg_id = cq_message.get("message_id")
+            inline_message_id = callback_query.get("inline_message_id")
             try:
-                await child_bot.edit_message_reply_markup(
-                    chat_id=chat.get("id"), message_id=msg_id, reply_markup=dev_keyboard()
-                )
+                if inline_message_id:
+                    await child_bot.edit_message_reply_markup(
+                        inline_message_id=inline_message_id, reply_markup=dev_keyboard()
+                    )
+                else:
+                    cq_message = callback_query.get("message") or {}
+                    chat = cq_message.get("chat") or {}
+                    msg_id = cq_message.get("message_id")
+                    if chat.get("id") and msg_id:
+                        await child_bot.edit_message_reply_markup(
+                            chat_id=chat.get("id"), message_id=msg_id, reply_markup=dev_keyboard()
+                        )
             except Exception:
                 pass  # الرسالة صارت قديمة/محذوفة أو نفس المحتوى (تجاهل بهدوء)
             await child_bot.answer_callback_query(
