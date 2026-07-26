@@ -42,6 +42,7 @@ from aiogram.types import (
     RichTextTextMention,
     TelegramObject,
     Update,
+    User,
 )
 from pydantic import ValidationError
 
@@ -79,15 +80,19 @@ else:
 DEV_BUTTON_TEXT = "Huge Dev"
 DEV_BUTTON_URL = "https://t.me/ihhai"
 
-# رقم إضافي يضاف يدوياً على عداد القلوب المعروض (فوق تصويتات المستخدمين
-# الحقيقية) — تتحكم فيه أنت مباشرة بتعديل هذا السطر بس، بدون أي تفاعل
-# بتليجرام. غيّره لأي رقم تريده (0 = بدون أي إضافة).
-DEV_HEARTS_BOOST = 96
+# رقمين إضافيين يتحكم فيهم المطور مباشرة من الكود (بدون أي تفاعل بتليجرام)،
+# ينضافون بس على بيانات حساب المطور نفسه (أول آيدي بـADMIN_IDS) بقائمة
+# /top وبعداد لايكاته — ما يأثرون على أي مستخدم ثاني. غيّرهم لأي رقم تريده
+# (0 = بدون أي إضافة).
+DEV_HEARTS_BOOST = 106
+DEV_USAGE_BOOST = 2006
 
-# ==================== زر القلب التفاعلي (❤️ تصويت مرة وحدة لكل شخص) ====================
-# كل شخص يكدر يصوّت مرة وحدة بس — يضغط الزر فتنحط له ❤️، ويضغطه مرة ثانية
-# فيتلغي تصويته. العداد المعروض = عدد الأشخاص المصوّتين حالياً (مو عدد
-# الضغطات). مشترك بين البوت الرئيسي وكل البوتات الفرعية، ومحفوظ بشكل دائم.
+TOP_LIST_LIMIT = 10
+
+# ==================== زر القلب التفاعلي (❤️ لايك لكل بروفايل، مرة وحدة لكل شخص) ====================
+# كل بروفايل (رسالة /id أو رد وضع الضيف) إله عداد لايكات خاص فيه، مو عداد
+# عام مشترك. أي شخص يكدر يلايك بروفايل معين مرة وحدة، ويضغط الزر مرة ثانية
+# يلغي لايكه. البيانات تتحفظ بشكل دائم وتُستخدم لقائمة /top (الأكثر لايكات).
 HEARTS_PATH = Path(__file__).parent / "hearts.json"
 HEARTS_LOCK = asyncio.Lock()
 
@@ -99,13 +104,14 @@ def load_hearts() -> dict:
                 data = json.load(f)
         except Exception:
             logging.exception("فشل تحميل hearts.json، رح نبدأ من الصفر")
-            return {"voters": []}
-        if "voters" not in data:
-            # ترحيل تلقائي من صيغة قديمة (عداد بدون حد للشخص الوحد) لصيغة
-            # التصويت الجديدة — كل شخص كان تفاعل قبل يتحسب مصوّت حالياً.
-            data = {"voters": list(data.get("users", {}).keys())}
+            return {"likes": {}}
+        if "likes" not in data:
+            # صيغة قديمة (عداد عام مشترك) ما تنحفظ منها معلومات كفاية نعرف
+            # مين لايك بروفايل مين، فنبدأ بيانات اللايكات من الصفر بالصيغة
+            # الجديدة (لكل بروفايل عداده الخاص فيه).
+            data = {"likes": {}}
         return data
-    return {"voters": []}
+    return {"likes": {}}
 
 
 def _write_hearts_sync(data: dict) -> None:
@@ -118,22 +124,141 @@ def _write_hearts_sync(data: dict) -> None:
 HEARTS = load_hearts()
 
 
-async def toggle_heart(user_id: int) -> tuple[int, bool]:
-    """يبدّل تصويت المستخدم: لو ما صوّت من قبل يسجّله (يزيد العداد)، ولو كان
-    مصوّت يلغي تصويته (ينقص العداد). يحفظ فوراً على القرص (atomic).
-    يرجع (العداد الكلي الجديد, هل المستخدم مصوّت الحين)."""
+def likes_count_for(target_user_id: int) -> int:
+    """عدد اللايكات الحالي لبروفايل مستخدم معين + بوست المطور لو كان هو صاحب
+    هذا البروفايل بالذات."""
+    count = len(HEARTS.get("likes", {}).get(str(target_user_id), []))
+    if target_user_id in ADMIN_IDS:
+        count += DEV_HEARTS_BOOST
+    return count
+
+
+async def toggle_heart(target_user_id: int, voter_id: int) -> tuple[int, bool]:
+    """يبدّل لايك voter_id على بروفايل target_user_id: لو ما لايكه من قبل
+    يسجّله (يزيد عداد هذا البروفايل)، ولو كان لايكه يلغيه (ينقصه). يحفظ فوراً
+    على القرص (atomic). يرجع (عداد هذا البروفايل الجديد, هل لايكه الحين)."""
     async with HEARTS_LOCK:
-        voters = set(HEARTS.get("voters", []))
-        uid = str(user_id)
-        if uid in voters:
-            voters.discard(uid)
+        likes = HEARTS.setdefault("likes", {})
+        key = str(target_user_id)
+        voters = set(likes.get(key, []))
+        vid = str(voter_id)
+        if vid in voters:
+            voters.discard(vid)
             voted_now = False
         else:
-            voters.add(uid)
+            voters.add(vid)
             voted_now = True
-        HEARTS["voters"] = list(voters)
+        likes[key] = list(voters)
         await asyncio.to_thread(_write_hearts_sync, HEARTS)
-        return len(voters), voted_now
+    return likes_count_for(target_user_id), voted_now
+
+
+# ==================== تتبع الاستخدام (لقائمة /top) ====================
+# كل مرة حد يستخدم /id أو يتفعّل معه وضع الضيف، نسجّل اسمه الحالي + نزيد
+# عداد استخدامه بمقدار وحدة. نستخدم هذا لقائمة "الأكثر استخدام للبوت".
+USAGE_PATH = Path(__file__).parent / "usage.json"
+USAGE_LOCK = asyncio.Lock()
+
+
+def load_usage() -> dict:
+    if USAGE_PATH.exists():
+        try:
+            with open(USAGE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            logging.exception("فشل تحميل usage.json، رح نبدأ من الصفر")
+    return {"users": {}}
+
+
+def _write_usage_sync(data: dict) -> None:
+    tmp_path = USAGE_PATH.with_suffix(".json.tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, USAGE_PATH)
+
+
+USAGE = load_usage()
+
+
+async def record_usage(user) -> None:
+    """يسجّل/يحدّث بيانات استخدام هذا المستخدم للبوت (اسمه الحالي + يوزرنيمه
+    + عدد مرات الاستخدام)، يستخدم بأمر /id ووضع الضيف."""
+    async with USAGE_LOCK:
+        users = USAGE.setdefault("users", {})
+        key = str(user.id)
+        entry = users.setdefault(key, {"name": user.full_name, "username": None, "count": 0})
+        entry["name"] = user.full_name
+        entry["username"] = getattr(user, "username", None)
+        entry["count"] = entry.get("count", 0) + 1
+        await asyncio.to_thread(_write_usage_sync, USAGE)
+
+
+def usage_count_for(user_id: int) -> int:
+    count = USAGE.get("users", {}).get(str(user_id), {}).get("count", 0)
+    if user_id in ADMIN_IDS:
+        count += DEV_USAGE_BOOST
+    return count
+
+
+def _mention_id_line(uid_str: str, name: str) -> list:
+    """يبني سطر 'منشن بالاسم — ID: xxx' بدون الحاجة لكائن مستخدم حقيقي حي،
+    نستخدمه لبناء قائمة /top من بيانات مخزّنة مسبقاً."""
+    fake_user = User(id=int(uid_str), is_bot=False, first_name=name or "مستخدم")
+    return [
+        RichTextTextMention(text=name or "مستخدم", user=fake_user),
+        f" — ID: {uid_str}\n",
+    ]
+
+
+def build_top_users_rich_message() -> InputRichMessage:
+    """يبني رسالة غنية بعنوان Top Users فيها Toggle block للأكثر استخدام
+    للبوت، وToggle block ثاني تحته للأكثر حصولاً على لايكات."""
+    usage_users = USAGE.get("users", {})
+    ranked_by_usage = sorted(
+        usage_users.items(),
+        key=lambda kv: usage_count_for(int(kv[0])),
+        reverse=True,
+    )[:TOP_LIST_LIMIT]
+
+    likes_map = HEARTS.get("likes", {})
+    ranked_by_likes = sorted(
+        likes_map.items(),
+        key=lambda kv: likes_count_for(int(kv[0])),
+        reverse=True,
+    )[:TOP_LIST_LIMIT]
+
+    def cached_name(uid_str: str) -> str:
+        return usage_users.get(uid_str, {}).get("name", "مستخدم")
+
+    usage_lines: list = []
+    if ranked_by_usage:
+        for uid_str, info in ranked_by_usage:
+            usage_lines.extend(_mention_id_line(uid_str, info.get("name", "مستخدم")))
+    else:
+        usage_lines = ["ماكو بيانات لهسه."]
+
+    likes_lines: list = []
+    if ranked_by_likes:
+        for uid_str, _voters in ranked_by_likes:
+            likes_lines.extend(_mention_id_line(uid_str, cached_name(uid_str)))
+    else:
+        likes_lines = ["ماكو بيانات لهسه."]
+
+    return InputRichMessage(
+        blocks=[
+            InputRichBlockSectionHeading(text="🏆 Top Users", size=2),
+            InputRichBlockDetails(
+                summary="الأكثر استخدام للبوت",
+                blocks=[InputRichBlockParagraph(text=usage_lines)],
+                is_open=False,
+            ),
+            InputRichBlockDetails(
+                summary="الأكثر حصولاً على لايكات ❤️",
+                blocks=[InputRichBlockParagraph(text=likes_lines)],
+                is_open=False,
+            ),
+        ]
+    )
 CONFIG_PATH = Path(__file__).parent / "bot_config.json"
 
 # مهلة انتظار رد بوت الـ Group Help (بالثواني) قبل ما نكمل ونرسل الرسالة الغنية بدونه
@@ -166,6 +291,7 @@ DEFAULT_CONFIG = {
         "start": [],
         "id": [],
         "secret": [],
+        "top": [],
     },
     # ربط بوت خارجي (زي Group Help) نطلب منه أمر ونقرا قيمة من رده بالـregex.
     # كل شي هنا قابل للتعديل من لوحة /admin بدون لمس الكود:
@@ -229,16 +355,17 @@ def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 
-def dev_keyboard() -> InlineKeyboardMarkup:
-    """كيبورد فيها زر Huge Dev + زر القلب التفاعلي (❤️ + العداد الكلي).
-    تستخدم بكل رسالة غنية (بـ/id ووضع الضيف)، بالبوت الرئيسي وكل البوتات
-    الفرعية، وكلهم يشتركون بنفس عداد hearts.json."""
-    total = len(HEARTS.get("voters", [])) + DEV_HEARTS_BOOST
+def dev_keyboard(target_user_id: int | None = None) -> InlineKeyboardMarkup:
+    """كيبورد فيها زر Huge Dev + زر القلب التفاعلي الخاص ببروفايل معين
+    (❤️ + عدد لايكات هذا البروفايل بالذات، مو عداد عام). تستخدم بكل رسالة
+    غنية (بـ/id ووضع الضيف)، بالبوت الرئيسي وكل البوتات الفرعية."""
+    count = likes_count_for(target_user_id) if target_user_id is not None else 0
+    callback_data = f"heart_like:{target_user_id}" if target_user_id is not None else "heart_like:0"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(text=DEV_BUTTON_TEXT, url=DEV_BUTTON_URL),
-                InlineKeyboardButton(text=f"❤️ {total}", callback_data="heart_like"),
+                InlineKeyboardButton(text=f"❤️ {count}", callback_data=callback_data),
             ]
         ]
     )
@@ -512,10 +639,11 @@ async def send_rich_profile(
     ولو المجموعة مقيدة من إرسال الصور (أو صارت مشكلة بالصورة نفسها) يرسلها
     بديل بدون صور مع تحذير بالعنوان، ورابط الرسالة الأصلية + يوزر المستخدم
     المتأثر بالأسفل (لو متوفرين context_chat_username/context_message_id)."""
+    await record_usage(user)
     rich_message = await build_profile_rich_message(bot_instance, user, external_field=external_field)
     try:
         await bot_instance.send_rich_message(
-            chat_id=chat_id, rich_message=rich_message, reply_markup=dev_keyboard()
+            chat_id=chat_id, rich_message=rich_message, reply_markup=dev_keyboard(user.id)
         )
     except TelegramBadRequest as e:
         if not _is_recoverable_photo_error(e):
@@ -530,7 +658,7 @@ async def send_rich_profile(
             extra_footer_text=footer,
         )
         await bot_instance.send_rich_message(
-            chat_id=chat_id, rich_message=fallback, reply_markup=dev_keyboard()
+            chat_id=chat_id, rich_message=fallback, reply_markup=dev_keyboard(user.id)
         )
 
 
@@ -546,6 +674,7 @@ async def answer_guest_query_with_profile(
     الضيف، ولو المجموعة مقيدة من إرسال الصور (أو صارت مشكلة بالصورة نفسها)
     يرد ببديل بدون صور مع تحذير + رابط الرسالة الأصلية ويوزر المستخدم
     المتأثر (لو متوفرين context_chat_id/context_chat_username/context_message_id)."""
+    await record_usage(caller)
     rich_message = await build_profile_rich_message(bot_instance, caller)
     try:
         await bot_instance.answer_guest_query(
@@ -554,7 +683,7 @@ async def answer_guest_query_with_profile(
                 id="guest_reply",
                 title="رد البوت",
                 input_message_content=InputRichMessageContent(rich_message=rich_message),
-                reply_markup=dev_keyboard(),
+                reply_markup=dev_keyboard(caller.id),
             ),
         )
     except TelegramBadRequest as e:
@@ -576,7 +705,7 @@ async def answer_guest_query_with_profile(
                 id="guest_reply",
                 title="رد البوت",
                 input_message_content=InputRichMessageContent(rich_message=fallback),
-                reply_markup=dev_keyboard(),
+                reply_markup=dev_keyboard(caller.id),
             ),
         )
 
@@ -633,6 +762,23 @@ async def cmd_id(message: Message):
 @dp.message(F.text.func(lambda t: matches_alias(t, "id")))
 async def alias_id(message: Message):
     await send_profile_rich_message(message)
+
+
+# ==================== /top + كلماته المفتاحية ====================
+
+async def send_top_users(message: Message) -> None:
+    rich_message = build_top_users_rich_message()
+    await bot.send_rich_message(chat_id=message.chat.id, rich_message=rich_message)
+
+
+@dp.message(Command("top"))
+async def cmd_top(message: Message):
+    await send_top_users(message)
+
+
+@dp.message(F.text.func(lambda t: matches_alias(t, "top")))
+async def alias_top(message: Message):
+    await send_top_users(message)
 
 
 # ==================== /secret + كلماته المفتاحية ====================
@@ -702,19 +848,25 @@ async def handle_secret_callback(callback: CallbackQuery):
     await callback.answer()
 
 
-@dp.callback_query(F.data == "heart_like")
+@dp.callback_query(F.data.startswith("heart_like:"))
 async def handle_heart_like(callback: CallbackQuery):
-    """يبدّل تصويت هذا المستخدم (تصويت/إلغاء تصويت) ويحدّث نص الزر فوراً.
-    رسائل وضع الضيف (guest mode) تترسل بآلية Inline Query، فتعديلها يصير
-    بـinline_message_id بس، مو بـchat_id/message_id العاديين."""
-    _, voted_now = await toggle_heart(callback.from_user.id)
+    """يبدّل لايك هذا المستخدم على البروفايل المحدد (لايك/إلغاء لايك) ويحدّث
+    نص الزر فوراً. رسائل وضع الضيف (guest mode) تترسل بآلية Inline Query،
+    فتعديلها يصير بـinline_message_id بس، مو بـchat_id/message_id العاديين."""
+    try:
+        target_id = int(callback.data.split(":", 1)[1])
+    except (IndexError, ValueError):
+        await callback.answer()
+        return
+
+    _, voted_now = await toggle_heart(target_id, callback.from_user.id)
     try:
         if callback.inline_message_id:
             await bot.edit_message_reply_markup(
-                inline_message_id=callback.inline_message_id, reply_markup=dev_keyboard()
+                inline_message_id=callback.inline_message_id, reply_markup=dev_keyboard(target_id)
             )
         elif callback.message:
-            await callback.message.edit_reply_markup(reply_markup=dev_keyboard())
+            await callback.message.edit_reply_markup(reply_markup=dev_keyboard(target_id))
     except Exception:
         pass  # الرسالة صارت قديمة/محذوفة أو نفس المحتوى (تجاهل بهدوء)
     await callback.answer("❤️ شكراً على تصويتك!" if voted_now else "💔 تم إلغاء تصويتك")
@@ -734,9 +886,43 @@ def is_explicit_username_mention(message: Message) -> bool:
     return target in message.text.lower()
 
 
+def extract_text_after_mention(message: Message) -> str:
+    """يشيل جزء المنشن (@يوزر_البوت) من نص الرسالة ويرجع الباقي بعد التنظيف،
+    عشان نتحقق هل الباقي يطابق كلمة مفتاحية زي 'توب' (وضع الضيف: @اليوزر توب)."""
+    text = message.text or ""
+    target = f"@{BOT_USERNAME}".lower()
+    for entity in message.entities or []:
+        if entity.type == "mention":
+            mention_text = text[entity.offset : entity.offset + entity.length]
+            if mention_text.lower() == target:
+                return (text[: entity.offset] + text[entity.offset + entity.length :]).strip()
+    idx = text.lower().find(target)
+    if idx != -1:
+        return (text[:idx] + text[idx + len(target) :]).strip()
+    return text.strip()
+
+
+async def answer_guest_query_with_top(bot_instance: Bot, guest_query_id: str) -> None:
+    rich_message = build_top_users_rich_message()
+    await bot_instance.answer_guest_query(
+        guest_query_id=guest_query_id,
+        result=InlineQueryResultArticle(
+            id="guest_top_reply",
+            title="Top Users",
+            input_message_content=InputRichMessageContent(rich_message=rich_message),
+        ),
+    )
+
+
 @dp.guest_message()
 async def handle_guest_mention(message: Message):
     if not is_explicit_username_mention(message):
+        return
+
+    # وضع الضيف: @يوزر_البوت توب -> يطلع قائمة Top Users بدل رسالة البروفايل
+    remaining_text = extract_text_after_mention(message)
+    if matches_alias(remaining_text, "top"):
+        await answer_guest_query_with_top(bot, message.guest_query_id)
         return
 
     caller = message.guest_bot_caller_user or message.from_user
@@ -865,7 +1051,7 @@ async def handle_new_managed_bot(mb) -> None:
     """يتنفذ لما نستلم managed_bot update: يجيب توكن البوت الجديد، يحفظه،
     يبلغ صاحبه، ويشغّل له worker مستقل."""
     try:
-        token = await bot.get_managed_bot_token(user_id=mb.user.id)
+        token = await bot.get_managed_bot_token(user_id=mb.bot_user.id)
     except Exception:
         logging.exception("فشل جلب توكن البوت المُدار الجديد (owner=%s)", mb.user.id)
         return
@@ -906,6 +1092,23 @@ def child_is_explicit_username_mention(message_text: str | None, entities: list,
     return target in message_text.lower()
 
 
+def child_extract_text_after_mention(message_text: str | None, entities: list, username: str | None) -> str:
+    text = message_text or ""
+    if not username:
+        return text.strip()
+    target = f"@{username}".lower()
+    for entity in entities or []:
+        if entity.get("type") == "mention":
+            offset, length = entity.get("offset", 0), entity.get("length", 0)
+            mention_text = text[offset : offset + length]
+            if mention_text.lower() == target:
+                return (text[:offset] + text[offset + length :]).strip()
+    idx = text.lower().find(target)
+    if idx != -1:
+        return (text[:idx] + text[idx + len(target) :]).strip()
+    return text.strip()
+
+
 async def handle_managed_child_update(
     child_bot: Bot, raw_update: dict, owner_id: int, username: str | None
 ) -> None:
@@ -934,6 +1137,7 @@ async def handle_managed_child_update(
             is_id = text.startswith("/id") or matches_alias(text, "id")
             is_secret = text.startswith("/secret") or matches_alias(text, "secret")
             is_start = text.startswith("/start") or matches_alias(text, "start")
+            is_top = text.startswith("/top") or matches_alias(text, "top")
 
             if is_start:
                 button = CONFIG.get("welcome_button")
@@ -944,6 +1148,12 @@ async def handle_managed_child_update(
                     )
                 await child_bot.send_message(
                     chat_id=chat_id, text=CONFIG["texts"]["welcome"], reply_markup=keyboard
+                )
+                return
+
+            if is_top:
+                await child_bot.send_rich_message(
+                    chat_id=chat_id, rich_message=build_top_users_rich_message()
                 )
                 return
 
@@ -980,6 +1190,21 @@ async def handle_managed_child_update(
             entities = guest_message.get("entities") or []
             if not child_is_explicit_username_mention(text, entities, username):
                 return
+
+            remaining_text = child_extract_text_after_mention(text, entities, username)
+            if matches_alias(remaining_text, "top"):
+                await child_bot.answer_guest_query(
+                    guest_query_id=guest_message["guest_query_id"],
+                    result=InlineQueryResultArticle(
+                        id="guest_top_reply",
+                        title="Top Users",
+                        input_message_content=InputRichMessageContent(
+                            rich_message=build_top_users_rich_message()
+                        ),
+                    ),
+                )
+                return
+
             caller_raw = guest_message.get("guest_bot_caller_user") or guest_message.get("from") or {}
             caller = SimpleNamespace(
                 id=caller_raw.get("id"),
@@ -1003,15 +1228,20 @@ async def handle_managed_child_update(
             )
             return
 
-        if callback_query is not None and callback_query.get("data") == "heart_like":
+        if callback_query is not None and (callback_query.get("data") or "").startswith("heart_like:"):
             from_user = callback_query.get("from") or {}
             uid = from_user.get("id")
-            _, voted_now = await toggle_heart(uid)
+            try:
+                target_id = int(callback_query["data"].split(":", 1)[1])
+            except (KeyError, IndexError, ValueError):
+                await child_bot.answer_callback_query(callback_query_id=callback_query["id"])
+                return
+            _, voted_now = await toggle_heart(target_id, uid)
             inline_message_id = callback_query.get("inline_message_id")
             try:
                 if inline_message_id:
                     await child_bot.edit_message_reply_markup(
-                        inline_message_id=inline_message_id, reply_markup=dev_keyboard()
+                        inline_message_id=inline_message_id, reply_markup=dev_keyboard(target_id)
                     )
                 else:
                     cq_message = callback_query.get("message") or {}
@@ -1019,7 +1249,7 @@ async def handle_managed_child_update(
                     msg_id = cq_message.get("message_id")
                     if chat.get("id") and msg_id:
                         await child_bot.edit_message_reply_markup(
-                            chat_id=chat.get("id"), message_id=msg_id, reply_markup=dev_keyboard()
+                            chat_id=chat.get("id"), message_id=msg_id, reply_markup=dev_keyboard(target_id)
                         )
             except Exception:
                 pass  # الرسالة صارت قديمة/محذوفة أو نفس المحتوى (تجاهل بهدوء)
@@ -1132,6 +1362,7 @@ class EditStates(StatesGroup):
     waiting_new_alias_start = State()
     waiting_new_alias_id = State()
     waiting_new_alias_secret = State()
+    waiting_new_alias_top = State()
     waiting_ext_username = State()
     waiting_ext_command = State()
     waiting_ext_regex = State()
@@ -1143,8 +1374,9 @@ ALIAS_STATE_MAP = {
     "start": EditStates.waiting_new_alias_start,
     "id": EditStates.waiting_new_alias_id,
     "secret": EditStates.waiting_new_alias_secret,
+    "top": EditStates.waiting_new_alias_top,
 }
-COMMAND_LABELS = {"start": "/start", "id": "/id", "secret": "/secret"}
+COMMAND_LABELS = {"start": "/start", "id": "/id", "secret": "/secret", "top": "/top"}
 
 
 def admin_main_menu() -> InlineKeyboardMarkup:
