@@ -24,6 +24,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
+    BufferedInputFile,
     CallbackQuery,
     ErrorEvent,
     InlineKeyboardButton,
@@ -39,6 +40,7 @@ from aiogram.types import (
     InputRichMessageContent,
     Message,
     RichTextCode,
+    RichTextMarked,
     RichTextTextMention,
     TelegramObject,
     Update,
@@ -87,7 +89,7 @@ DEV_BUTTON_URL = "https://t.me/ihhai"
 DEV_HEARTS_BOOST = 106
 DEV_USAGE_BOOST = 2006
 
-TOP_LIST_LIMIT = 10
+TOP_LIST_LIMIT = 56
 
 # ==================== زر القلب التفاعلي (❤️ لايك لكل بروفايل، مرة وحدة لكل شخص) ====================
 # كل بروفايل (رسالة /id أو رد وضع الضيف) إله عداد لايكات خاص فيه، مو عداد
@@ -200,14 +202,20 @@ def usage_count_for(user_id: int) -> int:
     return count
 
 
-def _mention_id_line(uid_str: str, name: str, extra: str = "") -> list:
-    """يبني سطر 'منشن بالاسم — ID: xxx — رقم إضافي اختياري' بدون الحاجة
-    لكائن مستخدم حقيقي حي، نستخدمه لبناء قائمة /top من بيانات مخزّنة مسبقاً."""
+def _mention_id_line(uid_str: str, name: str, count_emoji: str | None = None, count: int | None = None) -> list:
+    """يبني سطر 'منشن بالاسم — ID: xxx — [إيموجي] [عدد مظلل/هايلايت]' بدون
+    الحاجة لكائن مستخدم حقيقي حي، نستخدمه لبناء قائمة /top من بيانات مخزّنة
+    مسبقاً. العدد نفسه يتحط بـRichTextMarked (هايلايت) عشان يبرز بالقائمة."""
     fake_user = User(id=int(uid_str), is_bot=False, first_name=name or "مستخدم")
-    return [
+    parts: list = [
         RichTextTextMention(text=name or "مستخدم", user=fake_user),
-        f" — ID: {uid_str}{extra}\n",
+        f" — ID: {uid_str}",
     ]
+    if count_emoji is not None and count is not None:
+        parts.append(f" — {count_emoji} ")
+        parts.append(RichTextMarked(text=str(count)))
+    parts.append("\n")
+    return parts
 
 
 def build_top_users_rich_message() -> InputRichMessage:
@@ -234,7 +242,7 @@ def build_top_users_rich_message() -> InputRichMessage:
     if ranked_by_usage:
         for uid_str, info in ranked_by_usage:
             count = usage_count_for(int(uid_str))
-            usage_lines.extend(_mention_id_line(uid_str, info.get("name", "مستخدم"), f" — 🔢 {count}"))
+            usage_lines.extend(_mention_id_line(uid_str, info.get("name", "مستخدم"), "🔢", count))
     else:
         usage_lines = ["ماكو بيانات لهسه."]
 
@@ -242,7 +250,7 @@ def build_top_users_rich_message() -> InputRichMessage:
     if ranked_by_likes:
         for uid_str, _voters in ranked_by_likes:
             count = likes_count_for(int(uid_str))
-            likes_lines.extend(_mention_id_line(uid_str, cached_name(uid_str), f" — ❤️ {count}"))
+            likes_lines.extend(_mention_id_line(uid_str, cached_name(uid_str), "❤️", count))
     else:
         likes_lines = ["ماكو بيانات لهسه."]
 
@@ -261,6 +269,14 @@ def build_top_users_rich_message() -> InputRichMessage:
             ),
         ]
     )
+def top_keyboard() -> InlineKeyboardMarkup:
+    """كيبورد فيها زر تحديث لقائمة Top Users، يعيد بناء القائمة ويعدّل نفس
+    الرسالة بأحدث بيانات (يشتغل بالرسائل العادية وبردود وضع الضيف)."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="🔄 تحديث", callback_data="top_refresh")]]
+    )
+
+
 CONFIG_PATH = Path(__file__).parent / "bot_config.json"
 
 # مهلة انتظار رد بوت الـ Group Help (بالثواني) قبل ما نكمل ونرسل الرسالة الغنية بدونه
@@ -784,7 +800,7 @@ async def alias_id(message: Message):
 
 async def send_top_users(message: Message) -> None:
     rich_message = build_top_users_rich_message()
-    await bot.send_rich_message(chat_id=message.chat.id, rich_message=rich_message)
+    await bot.send_rich_message(chat_id=message.chat.id, rich_message=rich_message, reply_markup=top_keyboard())
 
 
 @dp.message(Command("top"))
@@ -888,9 +904,37 @@ async def handle_heart_like(callback: CallbackQuery):
     await callback.answer("❤️ شكراً على تصويتك!" if voted_now else "💔 تم إلغاء تصويتك")
 
 
+@dp.callback_query(F.data == "top_refresh")
+async def handle_top_refresh(callback: CallbackQuery):
+    """يعيد بناء رسالة Top Users بأحدث بيانات ويعدّل نفس الرسالة (بالخاص/
+    الكروب أو برد وضع الضيف حسب توفر inline_message_id)."""
+    rich_message = build_top_users_rich_message()
+    try:
+        if callback.inline_message_id:
+            await bot.edit_message_text(
+                inline_message_id=callback.inline_message_id,
+                rich_message=rich_message,
+                reply_markup=top_keyboard(),
+            )
+        elif callback.message:
+            await bot.edit_message_text(
+                chat_id=callback.message.chat.id,
+                message_id=callback.message.message_id,
+                rich_message=rich_message,
+                reply_markup=top_keyboard(),
+            )
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower():
+            raise
+    await callback.answer("🔄 تم التحديث")
+
+
 # ==================== وضع الضيف ====================
 
 def is_explicit_username_mention(message: Message) -> bool:
+    """يرجع True بس إذا الرسالة فيها منشن صريح ليوزر البوت (@البوت)، مو مجرد
+    رد (reply) قديم. علامة "،،" مو شرط للتشغيل — هي بس تتحكم بمين يطلع
+    بروفايله لو الرسالة رد على شخص ثاني (شوف handle_guest_mention)."""
     if not message.text or not BOT_USERNAME:
         return False
     target = f"@{BOT_USERNAME}".lower()
@@ -903,19 +947,22 @@ def is_explicit_username_mention(message: Message) -> bool:
 
 
 def extract_text_after_mention(message: Message) -> str:
-    """يشيل جزء المنشن (@يوزر_البوت) من نص الرسالة ويرجع الباقي بعد التنظيف،
-    عشان نتحقق هل الباقي يطابق كلمة مفتاحية زي 'توب' (وضع الضيف: @اليوزر توب)."""
+    """يشيل جزء المنشن (@يوزر_البوت) وعلامة "،،" من نص الرسالة ويرجع الباقي
+    بعد التنظيف، عشان نتحقق هل الباقي يطابق كلمة مفتاحية زي 'توب'
+    (وضع الضيف: @اليوزر ،، توب)."""
     text = message.text or ""
     target = f"@{BOT_USERNAME}".lower()
     for entity in message.entities or []:
         if entity.type == "mention":
             mention_text = text[entity.offset : entity.offset + entity.length]
             if mention_text.lower() == target:
-                return (text[: entity.offset] + text[entity.offset + entity.length :]).strip()
-    idx = text.lower().find(target)
-    if idx != -1:
-        return (text[:idx] + text[idx + len(target) :]).strip()
-    return text.strip()
+                text = text[: entity.offset] + text[entity.offset + entity.length :]
+                break
+    else:
+        idx = text.lower().find(target)
+        if idx != -1:
+            text = text[:idx] + text[idx + len(target) :]
+    return text.replace("،،", "").strip()
 
 
 async def answer_guest_query_with_top(bot_instance: Bot, guest_query_id: str) -> None:
@@ -926,6 +973,7 @@ async def answer_guest_query_with_top(bot_instance: Bot, guest_query_id: str) ->
             id="guest_top_reply",
             title="Top Users",
             input_message_content=InputRichMessageContent(rich_message=rich_message),
+            reply_markup=top_keyboard(),
         ),
     )
 
@@ -941,7 +989,14 @@ async def handle_guest_mention(message: Message):
         await answer_guest_query_with_top(bot, message.guest_query_id)
         return
 
-    caller = message.guest_bot_caller_user or message.from_user
+    # 3 حالات:
+    #  1) بدون رد (منشن عادي)           -> بروفايل الشخص اللي كتب المنشن
+    #  2) رد + فيه "،،" بنص الرسالة      -> بروفايل الشخص المردود عليه
+    #  3) رد بدون "،،"                  -> بروفايل الشخص اللي كتب المنشن (نفس حالة 1)
+    if message.reply_to_message and message.reply_to_message.from_user and "،،" in (message.text or ""):
+        caller = message.reply_to_message.from_user
+    else:
+        caller = message.guest_bot_caller_user or message.from_user
     if caller is None:
         return
 
@@ -1096,6 +1151,8 @@ def start_managed_bot_worker(bot_id: str, entry: dict) -> None:
 
 
 def child_is_explicit_username_mention(message_text: str | None, entities: list, username: str | None) -> bool:
+    """نفس منطق is_explicit_username_mention بالبوت الرئيسي (بدون شرط "،،"
+    للتشغيل)، بس على raw JSON عشان تستخدمها البوتات الفرعية."""
     if not message_text or not username:
         return False
     target = f"@{username}".lower()
@@ -1111,18 +1168,20 @@ def child_is_explicit_username_mention(message_text: str | None, entities: list,
 def child_extract_text_after_mention(message_text: str | None, entities: list, username: str | None) -> str:
     text = message_text or ""
     if not username:
-        return text.strip()
+        return text.replace("،،", "").strip()
     target = f"@{username}".lower()
     for entity in entities or []:
         if entity.get("type") == "mention":
             offset, length = entity.get("offset", 0), entity.get("length", 0)
             mention_text = text[offset : offset + length]
             if mention_text.lower() == target:
-                return (text[:offset] + text[offset + length :]).strip()
-    idx = text.lower().find(target)
-    if idx != -1:
-        return (text[:idx] + text[idx + len(target) :]).strip()
-    return text.strip()
+                text = text[:offset] + text[offset + length :]
+                break
+    else:
+        idx = text.lower().find(target)
+        if idx != -1:
+            text = text[:idx] + text[idx + len(target) :]
+    return text.replace("،،", "").strip()
 
 
 async def handle_managed_child_update(
@@ -1169,7 +1228,7 @@ async def handle_managed_child_update(
 
             if is_top:
                 await child_bot.send_rich_message(
-                    chat_id=chat_id, rich_message=build_top_users_rich_message()
+                    chat_id=chat_id, rich_message=build_top_users_rich_message(), reply_markup=top_keyboard()
                 )
                 return
 
@@ -1217,11 +1276,18 @@ async def handle_managed_child_update(
                         input_message_content=InputRichMessageContent(
                             rich_message=build_top_users_rich_message()
                         ),
+                        reply_markup=top_keyboard(),
                     ),
                 )
                 return
 
-            caller_raw = guest_message.get("guest_bot_caller_user") or guest_message.get("from") or {}
+            # نفس الـ3 حالات بالبوت الرئيسي: رد + "،،" بالنص -> بروفايل
+            # الشخص المردود عليه، وإلا بروفايل الشخص اللي كتب المنشن.
+            reply_to = guest_message.get("reply_to_message")
+            if reply_to and reply_to.get("from") and "،،" in text:
+                caller_raw = reply_to["from"]
+            else:
+                caller_raw = guest_message.get("guest_bot_caller_user") or guest_message.get("from") or {}
             caller = SimpleNamespace(
                 id=caller_raw.get("id"),
                 full_name=" ".join(
@@ -1275,6 +1341,35 @@ async def handle_managed_child_update(
             )
             return
 
+        if callback_query is not None and callback_query.get("data") == "top_refresh":
+            rich_message = build_top_users_rich_message()
+            inline_message_id = callback_query.get("inline_message_id")
+            try:
+                if inline_message_id:
+                    await child_bot.edit_message_text(
+                        inline_message_id=inline_message_id,
+                        rich_message=rich_message,
+                        reply_markup=top_keyboard(),
+                    )
+                else:
+                    cq_message = callback_query.get("message") or {}
+                    chat = cq_message.get("chat") or {}
+                    msg_id = cq_message.get("message_id")
+                    if chat.get("id") and msg_id:
+                        await child_bot.edit_message_text(
+                            chat_id=chat.get("id"),
+                            message_id=msg_id,
+                            rich_message=rich_message,
+                            reply_markup=top_keyboard(),
+                        )
+            except TelegramBadRequest as e:
+                if "message is not modified" not in str(e).lower():
+                    logging.exception("فشل تحديث رسالة Top بالبوت الفرعي @%s", username)
+            await child_bot.answer_callback_query(
+                callback_query_id=callback_query["id"], text="🔄 تم التحديث"
+            )
+            return
+
         if callback_query is not None and callback_query.get("data") == "child_secret":
             cq_message = callback_query.get("message") or {}
             chat = cq_message.get("chat") or {}
@@ -1312,7 +1407,7 @@ async def handle_managed_child_update(
 
 async def run_managed_bot_worker(token: str, owner_id: int, username: str | None) -> None:
     """Polling مستقل لبوت فرعي واحد. ماكو حاجة لـDispatcher كامل لأن أوامره
-    محدودة، فنعالج التحديثات يدوياً مباشرة من الـraw JSON (زي safe_polling
+    محدودة أصلاً، فنعالج التحديثات يدوياً مباشرة من الـraw JSON (زي safe_polling
     بس مبسّط أكثر)."""
     child_bot = Bot(token=token)
     try:
@@ -1384,6 +1479,7 @@ class EditStates(StatesGroup):
     waiting_ext_regex = State()
     waiting_ext_label = State()
     waiting_ext_test_text = State()
+    waiting_import_file = State()
 
 
 ALIAS_STATE_MAP = {
@@ -1402,6 +1498,7 @@ def admin_main_menu() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🔑 الكلمات المفتاحية", callback_data="admin:aliases")],
             [InlineKeyboardButton(text="🔘 زر الترحيب", callback_data="admin:welcome_button")],
             [InlineKeyboardButton(text="🔗 ربط بوت خارجي (Info)", callback_data="admin:ext_bot")],
+            [InlineKeyboardButton(text="💾 نسخة احتياطية (تصدير/استيراد)", callback_data="admin:backup")],
         ]
     )
 
@@ -1895,6 +1992,120 @@ async def admin_delete_alias_confirm(callback: CallbackQuery):
 
     text, keyboard = alias_command_menu_text_and_keyboard(key)
     await callback.message.edit_text(text, reply_markup=keyboard)
+
+
+# ---------- نسخة احتياطية (تصدير/استيراد) ----------
+
+@dp.callback_query(F.data == "admin:backup")
+async def admin_backup_menu(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        return
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📤 تصدير نسخة احتياطية", callback_data="admin:export")],
+            [InlineKeyboardButton(text="📥 استيراد نسخة احتياطية", callback_data="admin:import")],
+            [InlineKeyboardButton(text="⬅️ رجوع", callback_data="admin:back")],
+        ]
+    )
+    await callback.message.edit_text(
+        "💾 نسخة احتياطية\n\n"
+        "📤 تصدير: يرسللك ملف JSON فيه كل الإعدادات (النصوص/الكلمات المفتاحية/"
+        "زر الترحيب/البوت الخارجي) + اللايكات + بيانات الاستخدام (Top).\n\n"
+        "📥 استيراد: تحمّل ملف JSON (نفس صيغة التصدير) ويستبدل كل هذا الشي "
+        "الحالي بالكامل.",
+        reply_markup=keyboard,
+    )
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "admin:export")
+async def admin_export_backup(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        return
+    backup = {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "config": CONFIG,
+        "hearts": HEARTS,
+        "usage": USAGE,
+    }
+    file_bytes = json.dumps(backup, ensure_ascii=False, indent=2).encode("utf-8")
+    filename = f"backup_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+    await callback.message.answer_document(
+        document=BufferedInputFile(file_bytes, filename=filename),
+        caption="📦 نسخة احتياطية كاملة (إعدادات + لايكات + استخدام)",
+    )
+    await callback.answer("✅ تم التصدير")
+
+
+@dp.callback_query(F.data == "admin:import")
+async def admin_import_prompt(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        return
+    await state.set_state(EditStates.waiting_import_file)
+    await callback.message.edit_text(
+        "📥 ارسل هسه ملف الـJSON (نفس اللي طلع من زر التصدير) عشان نستورده.\n\n"
+        "⚠️ تحذير: هذا راح يستبدل كل الإعدادات واللايكات وبيانات الاستخدام "
+        "الحالية بالكامل — تصدير نسخة جديدة الأول لو تحسبها احتياط."
+    )
+    await callback.answer()
+
+
+@dp.message(EditStates.waiting_import_file, F.document)
+async def admin_import_backup_file(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    await state.clear()
+
+    try:
+        file = await bot.get_file(message.document.file_id)
+        downloaded = await bot.download_file(file.file_path)
+        backup = json.loads(downloaded.read().decode("utf-8"))
+    except Exception as e:
+        await message.answer(f"❌ فشل قراءة الملف: {e}", reply_markup=admin_main_menu())
+        return
+
+    if not isinstance(backup, dict) or "config" not in backup:
+        await message.answer(
+            "❌ صيغة الملف غير صحيحة (لازم يحتوي مفتاح 'config' على الأقل، "
+            "نفس ملف التصدير).",
+            reply_markup=admin_main_menu(),
+        )
+        return
+
+    try:
+        new_config = json.loads(json.dumps(DEFAULT_CONFIG))
+        new_config.update(backup.get("config", {}))
+        merged_aliases = json.loads(json.dumps(DEFAULT_CONFIG["aliases"]))
+        merged_aliases.update(backup.get("config", {}).get("aliases", {}))
+        new_config["aliases"] = merged_aliases
+
+        CONFIG.clear()
+        CONFIG.update(new_config)
+        await save_config(CONFIG)
+
+        HEARTS.clear()
+        HEARTS.update(backup.get("hearts") or {"likes": {}})
+        await asyncio.to_thread(_write_hearts_sync, HEARTS)
+
+        USAGE.clear()
+        USAGE.update(backup.get("usage") or {"users": {}})
+        await asyncio.to_thread(_write_usage_sync, USAGE)
+    except Exception as e:
+        logging.exception("فشل استيراد النسخة الاحتياطية")
+        await message.answer(f"❌ صار خطأ أثناء الاستيراد: {e}", reply_markup=admin_main_menu())
+        return
+
+    await message.answer(
+        "✅ تم استيراد النسخة الاحتياطية بنجاح (الإعدادات + اللايكات + بيانات الاستخدام).",
+        reply_markup=admin_main_menu(),
+    )
+
+
+@dp.message(EditStates.waiting_import_file)
+async def admin_import_backup_wrong_type(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    await message.answer("⚠️ لازم ترسل ملف (Document) بصيغة JSON، مو نص عادي. جرب مرة ثانية:")
 
 
 # ==================== 8) معالج أخطاء عام لكل الـhandlers ====================
