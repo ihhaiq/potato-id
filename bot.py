@@ -549,7 +549,7 @@ async def build_profile_rich_message(
     نعرض المعلومات بنفس القالب الغني (Details/Toggle block) بس بدون ألبوم صور،
     بدل رسالة نصية عادية منفصلة.
     """
-    limit = 10 if include_photos else 1
+    limit = 50 if include_photos else 1
     photos = await bot_instance.get_user_profile_photos(user_id=user.id, limit=limit)
 
     is_premium = bool(getattr(user, "is_premium", False))
