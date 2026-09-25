@@ -1,58 +1,142 @@
-# بوت تليكرام (aiogram >= 3.30.0)
+# potato-id — Telegram Serverless
 
-## Telegram Serverless branch
+فرع `serverless-cleanup` ينقل البوت من Python/Aiogram إلى Telegram Serverless JavaScript مع الحفاظ على سلوك `main` قدر ما تسمح المنصة.
 
-الفرع `serverless-cleanup` قيد النقل من Python/Aiogram إلى Telegram Serverless JavaScript.
+## قبل النشر
 
-> **ملاحظة مهمة للمطور:** افتح `lib/developer-access.js` وحط ID حسابك الرقمي داخل `DEVELOPER_IDS` قبل النشر. مثال:
->
-> ```js
-> export const DEVELOPER_IDS = Object.freeze([123456789]);
-> ```
->
-> لا تحط BOT_TOKEN أو أي secret بهذا الملف. ID الحساب مو token، وهو المستخدم لصلاحية `/admin` وdeveloper boosts.
+افتح:
 
-## الميزات
+`lib/developer-access.js`
 
-- **/start** — رسالة ترحيب (نصها وزرها قابلين للتعديل من لوحة المطور)
-- **/id** — رسالة غنية (Rich Message) بألبوم صور بروفايل المستخدم + زر Huge Dev
-- **/secret** — رسالة مؤقتة (Ephemeral) فيها صورة البروفايل الحالية للمستخدم
-- **وضع الضيف** — يرد بس إذا انذكر يوزر البوت صراحة، برسالة غنية + زر Huge Dev
-- **/admin** — لوحة مطور (للآيديات المدرجة بـ`ADMIN_IDS` بس) لتعديل النصوص، إضافة/حذف كلمات مفتاحية للأوامر، وإدارة زر الترحيب
-- **/myid** — يطلعلك آيدي حسابك (تحتاجه عشان تحط نفسك بـ`ADMIN_IDS`)
+وحط ID حسابك الرقمي داخل:
 
-## ⚠️ ملاحظات مهمة قبل التشغيل
+```js
+export const DEVELOPER_IDS = Object.freeze([123456789]);
+```
 
-1. لازم تحط آيدياتك بمتغير `ADMIN_IDS` (بملف `.env`، اكتب `/myid` بالبوت عشان تعرفه).
-2. الإعدادات (النصوص/الكلمات المفتاحية/زر الترحيب) تنحفظ بملف `bot_config.json` بجنب السكربت — لا تحذفه إذا ما تريد تخسر إعداداتك. الحفظ يصير بشكل atomic (كتابة لملف مؤقت ثم استبدال) عشان ما ينكسر الملف لو صار قطع كهرباء أو تعديلين متزامنين بنفس اللحظة.
-3. البوت يستخدم Polling مخصص (`safe_polling`) بدل `dp.start_polling` الافتراضي، عشان لو تليجرام رجّع نوع تحديث غير مدعوم من نسخة aiogram الحالية، يتم تخطي هذا التحديث بصمت وإرسال تنبيه تفصيلي لأول آيدي بـ`ADMIN_IDS`، بدل ما البوت يعلق بلوپ أخطاء لا نهائي. نفس الشي لأي خطأ غير متوقع يصير داخل أي handler (عبر معالج أخطاء عام).
-4. التوكن ⚠️ لازم ينحط فقط عن طريق متغير البيئة `BOT_TOKEN` (بملف `.env`)، البوت يرفض يشتغل بدونه تفادياً لتسريب التوكن بالكود بالغلط.
+تقدر تعرف ID حسابك من `/myid`.
 
-## التثبيت والتشغيل
+> لا تحط BOT_TOKEN أو أي token/secret داخل الملف. الـID الرقمي يستخدم لصلاحية `/admin` وdeveloper boosts وتنبيهات الأخطاء فقط.
+
+## الميزات المنقولة
+
+- `/start` + الكلمات المفتاحية.
+- `/myid`.
+- `/id` + الكلمات المفتاحية.
+- Rich Profile بنفس Details + معلومات المستخدم + slideshow.
+- حتى 50 صورة بروفايل باستخدام Telegram `file_id`.
+- fallback بدون صور عند منع الصور أو فشل صورة داخل Rich Message.
+- Huge Dev + عداد القلوب.
+- like / unlike لكل بروفايل.
+- `/top` + refresh + ترتيب usage وlikes.
+- developer boosts الحالية: hearts `+106` وusage `+2006`.
+- `/secret` باستخدام Ephemeral Messages الحالية.
+- Guest Mode للبروفايل وTop.
+- Bot-to-Bot external info عبر state machine دائم بالـDB.
+- `/mybot` + تسجيل lifecycle لتحديثات `managed_bot`.
+- `/admin` كامل:
+  - تعديل نص الترحيب.
+  - تعديل نص الرسالة المؤقتة.
+  - إضافة/تعديل/حذف زر الترحيب.
+  - إدارة aliases لـ`/start`, `/id`, `/secret`, `/top`.
+  - إعداد external bot: username / command / regex / label.
+  - اختبار regex.
+  - backup export/import.
+- backup بصيغة متوافقة مع الشكل القديم: `config + hearts + usage`.
+- throttling دائم بالـDB.
+- update idempotency.
+- developer error reporting.
+
+## التخزين
+
+Serverless ما يعتمد على ملفات JSON أو ذاكرة العملية كمصدر دائم.
+
+الجداول الرئيسية في `schema.js`:
+
+- `bot_settings`
+- `command_aliases`
+- `heart_targets`
+- `heart_votes`
+- `usage_users`
+- `admin_states`
+- `pending_external_requests`
+- `managed_bots`
+- `processed_updates`
+- `request_windows`
+
+ملفات Python وJSON القديمة تبقى مرجع لسلوك `main` فقط، وليست runtime للنسخة Serverless.
+
+## Managed Bots
+
+الجزء manager-side منقول: إنشاء الرابط، استقبال `managed_bot` وتخزين bot ID/owner/username.
+
+**الـchild runtime نفسه مو مزيف داخل Serverless.** النسخة القديمة تشغل `getUpdates` worker مستقل لكل child bot، بينما Telegram Serverless ما يوفر بالوثائق الحالية مسارًا مثبتًا لاستقبال تحديثات child bot داخل نفس مشروع manager. لذلك ماكو polling دائم وماكو تخزين managed-bot tokens داخل DB.
+
+راجع `docs/parity.md` و`docs/serverless.md`.
+
+## الفحص والنشر
 
 ```bash
-pip install -r requirements.txt
+npm install
+npm test
 
-cp .env.example .env
-# عدّل .env وحط فيه BOT_TOKEN و ADMIN_IDS مالتك
-
-python bot.py
+npx tgcloud --version
+npx tgcloud status
+npx tgcloud diff
+npx tgcloud push
 ```
 
-## بنية المشروع
+إذا `schema.js` يحتوي تغييرات غير مطبقة:
 
-```
-.
-├── bot.py             # السكربت الرئيسي (شغّل هذا)
-├── bot_config.json     # إعدادات قابلة للتعديل من /admin (نصوص، كلمات مفتاحية، زر الترحيب)
-├── requirements.txt
-├── .env.example        # نموذج لمتغيرات البيئة (انسخه كـ .env)
-└── legacy/             # نسخ تجريبية/قديمة من البوت، محفوظة للمرجعية بس
+```bash
+npx tgcloud migrate
 ```
 
-> 📌 مجلد `legacy/` فيه نسخ سابقة من السكربت أثناء التطوير. غير مستخدمة بالتشغيل الفعلي — `bot.py` هو النسخة الحالية والمعتمدة.
+بعدها:
+
+```bash
+npx tgcloud webhook
+```
+
+راجع `docs/runtime-tests.md` لاختبار الأوامر والـcallbacks بعد النشر.
+
+## الملفات الأساسية
+
+```text
+schema.js
+handlers/
+  message.js
+  callback_query.js
+  guest_message.js
+  managed_bot.js
+lib/
+  admin.js
+  admin-state.js
+  config.js
+  developer-access.js
+  errors.js
+  external-bot.js
+  hearts.js
+  legacy-backup.js
+  managed-bots.js
+  profile.js
+  request-guard.js
+  secret.js
+  top.js
+  usage.js
+  welcome.js
+scripts/
+  validate-serverless.mjs
+docs/
+  serverless.md
+  parity.md
+  runtime-tests.md
+```
 
 ## أمان
 
-- لا ترفع ملف `.env` أبداً لجت هاب (موجود بالفعل بـ `.gitignore`).
-- لو أي توكن انكشف بالغلط بأي وقت (مثلاً كان مكتوب صريح بالكود بنسخة قديمة)، اعتبره مكشوف وسوي `/revoke` له فوراً من [@BotFather](https://t.me/BotFather) وولّد توكن جديد.
+- لا ترفع `.tgcloud/`.
+- لا ترفع bot token أو managed-bot token.
+- الـbackup العادي لا يحتوي managed-bot tokens.
+- لا تحول child bots إلى polling loops داخل Serverless.
+- لا تعتمد على process globals أو filesystem كحالة دائمة.
