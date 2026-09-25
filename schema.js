@@ -33,6 +33,11 @@ export const commandAliases = table('command_aliases', {
     .on(t.command, t.normalizedAlias),
 }));
 
+export const heartTargets = table('heart_targets', {
+  targetUserId: integer('target_user_id').primaryKey(),
+  createdAt: integer('created_at').notNull(),
+});
+
 export const heartVotes = table('heart_votes', {
   key: text('key').primaryKey(),
   targetUserId: integer('target_user_id').notNull(),
