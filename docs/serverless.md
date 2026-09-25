@@ -104,6 +104,7 @@ Implemented in root `schema.js`:
 - `bot_settings` — singleton structured settings plus `legacy_extra` for
   unknown legacy config keys that must round-trip.
 - `command_aliases` — one normalized alias row per command.
+- `heart_targets` — preserves profile presence in the likes ranking even after its last unlike.
 - `heart_votes` — unique target/voter vote rows.
 - `usage_users` — current display name, username and usage count.
 - `admin_states` — durable developer-panel FSM state + payload + expiry.
@@ -193,15 +194,13 @@ designed confidently.
 
 - Live tgcloud check for `managed_bot` handler support and child update routing.
 - Child-bot authentication/routing design without polling.
-- Exact Serverless equivalent for the old 8-second external-bot timeout; current
-  design uses base-first + later edit.
 - Verify file upload/download helpers in the actual installed SDK before porting
   backup import/export; platform docs/scaffolds have evolved.
 - Confirm the linked bot's Guest Mode and Bot-to-Bot settings in BotFather.
 - After `schema.js` is deployed, review the schema diff before running
   `tgcloud migrate`.
 
-## Migration status after Phases 2 and 3
+## Migration status after Phases 4 and 5
 
 | Feature area | Status |
 |---|---|
@@ -209,31 +208,43 @@ designed confidently.
 | state inventory | complete |
 | handler mapping | complete |
 | persistent schema | committed |
-| config storage | implemented in Serverless DB |
-| current bot_config seed | implemented from main's effective merged state |
-| admin FSM persistence | implemented |
-| heart vote persistence | implemented; callback UI comes in Phase 4 |
+| config + admin-state persistence | implemented |
+| hearts + target retention | implemented |
 | usage persistence | implemented; atomic increments |
-| throttling/idempotency | implemented; message path wired |
+| throttling/idempotency | implemented |
 | legacy backup normalization/import helper | implemented; admin upload UI comes later |
-| /start | implemented |
-| /myid | implemented |
-| /id | implemented |
-| start/id aliases | implemented |
-| Rich Profile rendering | implemented |
-| profile photos up to 50 | implemented |
-| photo-send fallback | implemented |
-| Huge Dev + heart keyboard | implemented |
-| developer boosts | code path implemented; developer ID registry still requires deployment value |
-| external Bot-to-Bot state machine | designed, not wired |
-| /top | not ported |
-| /secret | not ported |
-| Guest Mode | not ported |
-| Managed Bot lifecycle | investigated, live-platform check pending |
-| managed child runtime | unresolved |
+| /start + /myid + /id | implemented |
+| Rich Profile + 50 photos + fallback | implemented |
+| /top + aliases + refresh | implemented |
+| heart like/unlike callback | implemented |
+| /secret | implemented using current ephemeral_message_parameters |
+| Guest Mode profile | implemented |
+| Guest Top | implemented |
+| external Bot-to-Bot | implemented as persistent state machine |
+| /mybot creation link | implemented |
+| managed_bot lifecycle registration | implemented in source; live tgcloud handler acceptance still must be verified |
+| managed child runtime | blocked: no documented Serverless path currently proves delivery/auth for child-bot updates without polling |
 | /admin UI | not ported; state layer ready |
+| developer IDs | README documents manual lib/developer-access.js setup |
 | schema migration | not run from this environment |
 | deployment/runtime tgcloud tests | not run from this environment |
+
+### Phase 4 implementation notes
+
+- `lib/top.js` preserves the two Top rankings, limit 56, current names and developer boosts.
+- `heart_targets` preserves Python's target-key behavior after the last unlike, while `heart_votes` remains normalized and unique.
+- `handlers/callback_query.js` handles `heart_like:<id>`, `top_refresh` and `show_secret` for normal and inline/guest messages.
+- `lib/secret.js` uses current `ephemeral_message_parameters.receiver_user_id` and `callback_query_id`.
+- `handlers/guest_message.js` keeps the current explicit-username requirement, the reply + `،،` targeting rule, profile results and guest Top.
+
+### Phase 5 implementation notes
+
+- `lib/external-bot.js` replaces `GH_PENDING` / `asyncio.Future` with DB correlation keyed by chat + command message.
+- The external request keeps the old 8-second validity window. The base profile is sent immediately; a valid bot reply received in-window edits the same Rich Message with the extracted field.
+- External replies are validated by configured bot username and regex, and expired rows are removed lazily.
+- `/mybot` and `handlers/managed_bot.js` now persist manager-side managed-bot metadata without persisting the child token.
+- The current Bot API explicitly provides the manager with `managed_bot` updates and `getManagedBotToken`, but the Serverless project is bound to the manager bot's update routing. No official Serverless child-bot update/authentication primitive has been verified in the available platform reference.
+- Because of that blocker, the Python child `getUpdates` worker is intentionally **not** recreated. Child `/start`, `/id`, `/top`, `/secret`, Guest Mode and child callbacks remain blocked until a supported event route is proven.
 
 ### Phase 2 implementation notes
 
