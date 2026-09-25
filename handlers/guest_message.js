@@ -2,7 +2,7 @@ import { api } from 'sdk';
 import { commandMatchesAlias } from 'lib/config';
 import { answerGuestProfile } from 'lib/profile';
 import { buildTopUsersRichMessage, topKeyboard } from 'lib/top';
-import { allowMessageRequest, claimUpdate, releaseUpdate } from 'lib/request-guard';
+import { claimUpdate, releaseUpdate } from 'lib/request-guard';
 
 async function botUsername() {
   const me = await api.getMe();
@@ -45,7 +45,6 @@ export default async function (message, ctx = {}) {
   if (!await claimUpdate(updateId)) return;
 
   try {
-    if (!await allowMessageRequest(message)) return;
     if (!message?.guest_query_id) return;
 
     const username = await botUsername();
