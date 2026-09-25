@@ -1,4 +1,5 @@
 import { api } from 'sdk';
+import { handleAdminMessage } from 'lib/admin';
 import { commandMatchesAlias } from 'lib/config';
 import {
   handleExternalBotMessage,
@@ -42,6 +43,8 @@ export default async function (message, ctx = {}) {
 
   try {
     if (!await allowMessageRequest(message)) return;
+
+    if (await handleAdminMessage(message)) return;
 
     // Bot-to-Bot replies are handled before user command routing. Any other bot
     // message stays silent, matching the Python handler ordering.
