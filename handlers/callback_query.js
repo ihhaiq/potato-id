@@ -1,4 +1,5 @@
 import { api, BotApiError } from 'sdk';
+import { reportHandlerError } from 'lib/errors';
 import { handleAdminCallback } from 'lib/admin';
 import { profileKeyboard } from 'lib/profile';
 import { toggleHeart } from 'lib/hearts';
@@ -123,7 +124,7 @@ export default async function (query, ctx = {}) {
     await api.answerCallbackQuery({ callback_query_id: query.id });
   } catch (error) {
     await releaseUpdate(updateId);
-    console.error('callback_query handler failed', error);
+    await reportHandlerError('callback_query', error, ctx, query);
     throw error;
   }
 }
