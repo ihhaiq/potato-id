@@ -64,7 +64,7 @@ Serverless ما يعتمد على ملفات JSON أو ذاكرة العملية
 - `processed_updates`
 - `request_windows`
 
-ملفات Python وJSON القديمة تبقى مرجع لسلوك `main` فقط، وليست runtime للنسخة Serverless.
+الفرع نفسه لا يحتوي Python runtime ولا ملفات JSON state قديمة. مرجع السلوك التاريخي هو `main` فقط.
 
 ## Managed Bots
 
