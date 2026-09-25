@@ -1,4 +1,5 @@
 import { api } from 'sdk';
+import { reportHandlerError } from 'lib/errors';
 import { commandMatchesAlias } from 'lib/config';
 import { answerGuestProfile } from 'lib/profile';
 import { buildTopUsersRichMessage, topKeyboard } from 'lib/top';
@@ -70,7 +71,7 @@ export default async function (message, ctx = {}) {
     });
   } catch (error) {
     await releaseUpdate(updateId);
-    console.error('guest_message handler failed', error);
+    await reportHandlerError('guest_message', error, ctx, message);
     throw error;
   }
 }
