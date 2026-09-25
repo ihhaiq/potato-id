@@ -1,7 +1,13 @@
 import { api } from 'sdk';
 import { commandMatchesAlias } from 'lib/config';
-import { sendRichProfile } from 'lib/profile';
+import {
+  handleExternalBotMessage,
+  sendProfileWithExternalLookup,
+} from 'lib/external-bot';
+import { sendMyBot } from 'lib/managed-bots';
 import { claimUpdate, allowMessageRequest, releaseUpdate } from 'lib/request-guard';
+import { sendSecretPrompt } from 'lib/secret';
+import { sendTopUsers } from 'lib/top';
 import { sendWelcome } from 'lib/welcome';
 
 function commandName(text) {
@@ -30,14 +36,6 @@ async function sendMyId(message) {
   });
 }
 
-async function sendProfile(message) {
-  if (!message?.chat?.id || !message?.from?.id) return;
-  await sendRichProfile(message.chat.id, message.from, {
-    contextChatUsername: message.chat.username || null,
-    contextMessageId: message.message_id || null,
-  });
-}
-
 export default async function (message, ctx = {}) {
   const updateId = ctx?.update?.update_id;
   if (!await claimUpdate(updateId)) return;
@@ -45,7 +43,15 @@ export default async function (message, ctx = {}) {
   try {
     if (!await allowMessageRequest(message)) return;
 
+    // Bot-to-Bot replies are handled before user command routing. Any other bot
+    // message stays silent, matching the Python handler ordering.
+    if (message?.from?.is_bot) {
+      await handleExternalBotMessage(message);
+      return;
+    }
+
     const text = message?.text;
+
     if (matchesCommand(text, 'myid')) {
       await sendMyId(message);
       return;
@@ -57,13 +63,27 @@ export default async function (message, ctx = {}) {
     }
 
     if (await matchesCommandOrAlias(text, 'id')) {
-      await sendProfile(message);
+      await sendProfileWithExternalLookup(message);
       return;
     }
 
-    // Phase 2/3 intentionally leaves /top, /secret, /mybot, /admin,
-    // Guest Mode and the external-bot continuation to their later migration
-    // phases. Unknown ordinary messages stay silent, matching main.
+    if (await matchesCommandOrAlias(text, 'top')) {
+      if (message?.chat?.id) await sendTopUsers(message.chat.id);
+      return;
+    }
+
+    if (await matchesCommandOrAlias(text, 'secret')) {
+      await sendSecretPrompt(message);
+      return;
+    }
+
+    if (matchesCommand(text, 'mybot')) {
+      await sendMyBot(message);
+      return;
+    }
+
+    // /admin and its pending input states are ported in a later phase.
+    // Unknown ordinary messages stay silent, matching main.
   } catch (error) {
     await releaseUpdate(updateId);
     console.error('message handler failed', error);
