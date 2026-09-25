@@ -86,7 +86,6 @@ export default async function (message, ctx = {}) {
       return;
     }
 
-    // /admin and its pending input states are ported in a later phase.
     // Unknown ordinary messages stay silent, matching main.
   } catch (error) {
     await releaseUpdate(updateId);
