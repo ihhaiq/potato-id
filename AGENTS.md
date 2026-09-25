@@ -61,17 +61,27 @@ old local note disagree.
 
 ## Current migration status
 
-Phase 1 is the only completed phase:
+Phases 1-3 are implemented in source, with live tgcloud migration/deployment
+verification still pending:
 
-- repository + feature inventory: complete
-- persistent/in-memory state inventory: complete
-- Aiogram -> Serverless handler mapping: complete
-- initial Serverless scaffold: complete
-- proposed persistent schema: complete
-- Managed Bots: manager-side Bot API confirmed; child-update routing on
-  Telegram Serverless remains unproven pending live CLI/platform verification
-- feature handlers: not ported yet
-- database migration: not run yet
-- deployment: not run yet
+- repository + feature/state inventory: complete
+- Serverless scaffold and persistent schema: complete
+- config storage: DB-backed and seeded from main's effective bot_config state
+- admin FSM state: DB-backed with expiry
+- hearts: normalized unique target/voter rows and DB toggle helper
+- usage: atomic DB increment helper
+- throttling + update idempotency: DB-backed
+- legacy backup migration: validated config/hearts/usage normalization + DB import helper
+- message handler: /start, /myid, /id and start/id aliases
+- Rich Profile: Details + up to 50 profile photos + slideshow + fallback + Huge Dev/heart keyboard
+- external Bot-to-Bot continuation: not wired yet
+- /top and heart callback: storage ready, UI/handlers not ported yet
+- /secret: not ported yet
+- Guest Mode: not ported yet
+- Managed Bots: manager-side Bot API confirmed; child-update routing remains unproven
+- /admin UI: not ported yet; its persistent state layer is ready
+- developer ID registry: intentionally empty until numeric IDs are supplied for Serverless
+- schema migration: not run from this environment
+- deployment/runtime tests: not run from this environment
 
 Update this status immediately when code changes make it stale.
