@@ -1,0 +1,16 @@
+{
+  "name": "potato-id-serverless",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "devDependencies": {
+    "@tgcloud/cli": "^0.1.2"
+  },
+  "scripts": {
+    "status": "tgcloud status",
+    "diff": "tgcloud diff",
+    "deploy": "tgcloud push",
+    "migrate": "tgcloud migrate",
+    "run": "tgcloud run"
+  }
+}
