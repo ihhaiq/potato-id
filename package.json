@@ -11,6 +11,8 @@
     "diff": "tgcloud diff",
     "deploy": "tgcloud push",
     "migrate": "tgcloud migrate",
-    "run": "tgcloud run"
+    "run": "tgcloud run",
+    "validate": "node scripts/validate-serverless.mjs",
+    "test": "node scripts/validate-serverless.mjs"
   }
 }
