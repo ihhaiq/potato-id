@@ -1,5 +1,17 @@
 # بوت تليكرام (aiogram >= 3.30.0)
 
+## Telegram Serverless branch
+
+الفرع `serverless-cleanup` قيد النقل من Python/Aiogram إلى Telegram Serverless JavaScript.
+
+> **ملاحظة مهمة للمطور:** افتح `lib/developer-access.js` وحط ID حسابك الرقمي داخل `DEVELOPER_IDS` قبل النشر. مثال:
+>
+> ```js
+> export const DEVELOPER_IDS = Object.freeze([123456789]);
+> ```
+>
+> لا تحط BOT_TOKEN أو أي secret بهذا الملف. ID الحساب مو token، وهو المستخدم لصلاحية `/admin` وdeveloper boosts.
+
 ## الميزات
 
 - **/start** — رسالة ترحيب (نصها وزرها قابلين للتعديل من لوحة المطور)
