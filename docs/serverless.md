@@ -201,6 +201,86 @@ designed confidently.
 - After `schema.js` is deployed, review the schema diff before running
   `tgcloud migrate`.
 
+## Migration status after Phases 2 and 3
+
+| Feature area | Status |
+|---|---|
+| repository/code inventory | complete |
+| state inventory | complete |
+| handler mapping | complete |
+| persistent schema | committed |
+| config storage | implemented in Serverless DB |
+| current bot_config seed | implemented from main's effective merged state |
+| admin FSM persistence | implemented |
+| heart vote persistence | implemented; callback UI comes in Phase 4 |
+| usage persistence | implemented; atomic increments |
+| throttling/idempotency | implemented; message path wired |
+| legacy backup normalization/import helper | implemented; admin upload UI comes later |
+| /start | implemented |
+| /myid | implemented |
+| /id | implemented |
+| start/id aliases | implemented |
+| Rich Profile rendering | implemented |
+| profile photos up to 50 | implemented |
+| photo-send fallback | implemented |
+| Huge Dev + heart keyboard | implemented |
+| developer boosts | code path implemented; developer ID registry still requires deployment value |
+| external Bot-to-Bot state machine | designed, not wired |
+| /top | not ported |
+| /secret | not ported |
+| Guest Mode | not ported |
+| Managed Bot lifecycle | investigated, live-platform check pending |
+| managed child runtime | unresolved |
+| /admin UI | not ported; state layer ready |
+| schema migration | not run from this environment |
+| deployment/runtime tgcloud tests | not run from this environment |
+
+### Phase 2 implementation notes
+
+The Python JSON/process-memory state used by the current runtime is no longer
+needed by the new Phase 2 modules:
+
+- `lib/config.js` stores settings and aliases in DB and seeds the exact effective
+  state produced by `DEFAULT_CONFIG + bot_config.json` on current main.
+- `lib/admin-state.js` replaces Aiogram `MemoryStorage` for admin workflows.
+- `lib/hearts.js` stores one unique row per target/voter pair.
+- `lib/usage.js` performs atomic usage increments with SQL expressions.
+- `lib/request-guard.js` persists update claims and sliding request windows.
+- `lib/legacy-backup.js` validates the complete legacy backup before writes and
+  can import the old `config/hearts/usage` shape into the normalized tables.
+
+The backup helper intentionally does not claim a cross-table transaction because
+the current Serverless SDK reference used by this project does not document one.
+The later admin import UI must create/recommend a recovery export before replacing
+live data.
+
+### Phase 3 implementation notes
+
+`handlers/message.js` now handles the Phase 3 command slice and stays silent for
+unported commands/ordinary messages.
+
+`lib/profile.js` preserves main's current profile structure:
+
+- heading size 2;
+- closed Details block with ID, mention, username, Premium state and total photo count;
+- up to 50 profile photos, choosing the highest-resolution `file_id` for each;
+- slideshow block;
+- Huge Dev and `heart_like:<user_id>` inline buttons;
+- fallback without photos for `CHAT_SEND_PHOTOS_FORBIDDEN` and
+  `RICH_MESSAGE_PHOTO_INVALID`;
+- original-message/user context in the fallback.
+
+The current Bot API 10.3 block object types are used directly instead of Aiogram
+classes.
+
+### Deployment configuration still required
+
+Current `main` receives `ADMIN_IDS` only from its deployment environment; no
+numeric developer IDs are committed. Serverless source therefore keeps
+`lib/developer-access.js` empty rather than guessing an identity. Before admin
+and developer-boost parity can be declared, populate that registry with the same
+numeric IDs used by the current deployment.
+
 ## Migration status after Phase 1
 
 | Feature area | Status |
