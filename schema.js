@@ -104,7 +104,7 @@ export const managedBots = table('managed_bots', {
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, (t) => ({
-  ownerUnique: uniqueIndex('uq_managed_bots_owner').on(t.ownerId),
+  ownerIdx: index('idx_managed_bots_owner').on(t.ownerId),
   usernameIdx: index('idx_managed_bots_username').on(t.username),
 }));
 
