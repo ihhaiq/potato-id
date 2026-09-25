@@ -1,4 +1,5 @@
 import { api, BotApiError } from 'sdk';
+import { handleAdminCallback } from 'lib/admin';
 import { profileKeyboard } from 'lib/profile';
 import { toggleHeart } from 'lib/hearts';
 import { sendSecretForCallback } from 'lib/secret';
@@ -101,6 +102,8 @@ export default async function (query, ctx = {}) {
     }
 
     const data = String(query?.data || '');
+
+    if (await handleAdminCallback(query)) return;
 
     if (data === 'show_secret') {
       await sendSecretForCallback(query);
