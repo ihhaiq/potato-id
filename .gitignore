@@ -1,0 +1,9 @@
+.tgcloud/
+node_modules/
+.env
+.env.*
+__pycache__/
+*.py[cod]
+hearts.json
+usage.json
+managed_bots.json
