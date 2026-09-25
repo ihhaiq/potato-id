@@ -1,4 +1,5 @@
 import { api } from 'sdk';
+import { reportHandlerError } from 'lib/errors';
 import { handleAdminMessage } from 'lib/admin';
 import { commandMatchesAlias } from 'lib/config';
 import {
@@ -89,7 +90,7 @@ export default async function (message, ctx = {}) {
     // Unknown ordinary messages stay silent, matching main.
   } catch (error) {
     await releaseUpdate(updateId);
-    console.error('message handler failed', error);
+    await reportHandlerError('message', error, ctx, message);
     throw error;
   }
 }
