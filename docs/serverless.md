@@ -281,25 +281,6 @@ numeric developer IDs are committed. Serverless source therefore keeps
 and developer-boost parity can be declared, populate that registry with the same
 numeric IDs used by the current deployment.
 
-## Migration status after Phase 1
-
-| Feature area | Status |
-|---|---|
-| repository/code inventory | complete |
-| state inventory | complete |
-| handler mapping | complete |
-| proposed schema | committed |
-| Serverless local scaffold | committed |
-| main bot behavior port | not started |
-| admin state port | not started |
-| hearts/usage persistence | not started |
-| Guest Mode port | not started |
-| ephemeral secret port | not started |
-| external Bot-to-Bot state machine | designed, not implemented |
-| Managed Bot lifecycle | investigated, live-platform check pending |
-| managed child runtime | unresolved |
-| deployment/migration | not run from this environment |
-
 ## Planned commits
 
 1. `Add Telegram Serverless scaffold`
