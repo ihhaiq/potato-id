@@ -200,7 +200,7 @@ designed confidently.
 - After `schema.js` is deployed, review the schema diff before running
   `tgcloud migrate`.
 
-## Migration status after Phases 4 and 5
+## Migration status after Phase 6
 
 | Feature area | Status |
 |---|---|
@@ -212,7 +212,7 @@ designed confidently.
 | hearts + target retention | implemented |
 | usage persistence | implemented; atomic increments |
 | throttling/idempotency | implemented |
-| legacy backup normalization/import helper | implemented; admin upload UI comes later |
+| legacy backup export/import | implemented with admin UI |
 | /start + /myid + /id | implemented |
 | Rich Profile + 50 photos + fallback | implemented |
 | /top + aliases + refresh | implemented |
@@ -224,10 +224,10 @@ designed confidently.
 | /mybot creation link | implemented |
 | managed_bot lifecycle registration | implemented in source; live tgcloud handler acceptance still must be verified |
 | managed child runtime | blocked: no documented Serverless path currently proves delivery/auth for child-bot updates without polling |
-| /admin UI | not ported; state layer ready |
+| /admin UI | implemented |
 | developer IDs | README documents manual lib/developer-access.js setup |
 | schema migration | not run from this environment |
-| deployment/runtime tgcloud tests | not run from this environment |
+| deployment/runtime tgcloud tests | pending on linked local tgcloud project |
 
 ### Phase 4 implementation notes
 
@@ -246,6 +246,16 @@ designed confidently.
 - The current Bot API explicitly provides the manager with `managed_bot` updates and `getManagedBotToken`, but the Serverless project is bound to the manager bot's update routing. No official Serverless child-bot update/authentication primitive has been verified in the available platform reference.
 - Because of that blocker, the Python child `getUpdates` worker is intentionally **not** recreated. Child `/start`, `/id`, `/top`, `/secret`, Guest Mode and child callbacks remain blocked until a supported event route is proven.
 
+### Phase 6 implementation notes
+
+- `lib/admin.js` ports the full `/admin` callback and pending-input flow on top of persistent `admin_states`.
+- The same `admin:...` callback_data values from `main` are preserved.
+- Texts, welcome button, aliases, external-bot settings and regex testing are editable without filesystem state.
+- Backup export emits the legacy `exported_at/config/hearts/usage` JSON shape; import reads Telegram documents through `api.getFileContent`.
+- `lib/errors.js` reports unexpected handler failures to the first configured developer without logging tokens or full sensitive payloads.
+- `scripts/validate-serverless.mjs` statically checks bare imports, required feature wiring and forbidden Python/polling/JSON-runtime dependencies.
+- `docs/parity.md` is the final parity matrix; `docs/runtime-tests.md` is the deployment verification checklist.
+
 ### Phase 2 implementation notes
 
 The Python JSON/process-memory state used by the current runtime is no longer
@@ -262,13 +272,11 @@ needed by the new Phase 2 modules:
 
 The backup helper intentionally does not claim a cross-table transaction because
 the current Serverless SDK reference used by this project does not document one.
-The later admin import UI must create/recommend a recovery export before replacing
-live data.
+The admin import UI warns before destructive replacement; exporting a recovery copy first remains recommended.
 
 ### Phase 3 implementation notes
 
-`handlers/message.js` now handles the Phase 3 command slice and stays silent for
-unported commands/ordinary messages.
+`handlers/message.js` handles the migrated command set and stays silent for unsupported ordinary messages.
 
 `lib/profile.js` preserves main's current profile structure:
 
