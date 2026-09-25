@@ -61,8 +61,8 @@ old local note disagree.
 
 ## Current migration status
 
-Phases 1-3 are implemented in source, with live tgcloud migration/deployment
-verification still pending:
+Phases 1-5 are implemented in source as far as Telegram Serverless currently allows,
+with live tgcloud migration/deployment verification still pending:
 
 - repository + feature/state inventory: complete
 - Serverless scaffold and persistent schema: complete
@@ -74,11 +74,13 @@ verification still pending:
 - legacy backup migration: validated config/hearts/usage normalization + DB import helper
 - message handler: /start, /myid, /id and start/id aliases
 - Rich Profile: Details + up to 50 profile photos + slideshow + fallback + Huge Dev/heart keyboard
-- external Bot-to-Bot continuation: not wired yet
-- /top and heart callback: storage ready, UI/handlers not ported yet
-- /secret: not ported yet
-- Guest Mode: not ported yet
-- Managed Bots: manager-side Bot API confirmed; child-update routing remains unproven
+- /top + refresh callback: ported
+- heart like/unlike callback: ported
+- /secret: ported with current ephemeral_message_parameters
+- Guest Mode profile + Top: ported
+- external Bot-to-Bot continuation: ported as persistent 8-second state machine with base-first profile edit
+- /mybot + managed_bot lifecycle registration: ported manager-side
+- Managed child bot runtime: blocked pending a documented Serverless child-update routing/auth primitive; no polling loop or token persistence is used
 - /admin UI: not ported yet; its persistent state layer is ready
 - developer ID registry: intentionally empty until numeric IDs are supplied for Serverless
 - schema migration: not run from this environment
