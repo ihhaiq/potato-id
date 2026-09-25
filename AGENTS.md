@@ -10,8 +10,7 @@ JavaScript. Keep `main` unchanged and use it as the behavioral source of truth.
 - Migration branch: `serverless-cleanup`
 - Full migration notes: `docs/serverless.md`
 
-The old README is incomplete. Read `bot.py` before deciding that a feature does
-or does not exist.
+`bot.py` on `main` remains the behavioral source of truth for parity checks.
 
 ## References
 
@@ -61,29 +60,31 @@ old local note disagree.
 
 ## Current migration status
 
-Phases 1-5 are implemented in source as far as Telegram Serverless currently allows,
-with live tgcloud migration/deployment verification still pending:
+All migratable `main` features are implemented in source. Live tgcloud deployment
+verification is still pending, and managed-child execution remains a documented
+platform blocker.
 
 - repository + feature/state inventory: complete
 - Serverless scaffold and persistent schema: complete
-- config storage: DB-backed and seeded from main's effective bot_config state
-- admin FSM state: DB-backed with expiry
-- hearts: normalized unique target/voter rows and DB toggle helper
-- usage: atomic DB increment helper
+- config + aliases: DB-backed
+- admin FSM: DB-backed with expiry
+- hearts + empty target retention: DB-backed
+- usage: atomic DB increments
 - throttling + update idempotency: DB-backed
-- legacy backup migration: validated config/hearts/usage normalization + DB import helper
-- message handler: /start, /myid, /id and start/id aliases
-- Rich Profile: Details + up to 50 profile photos + slideshow + fallback + Huge Dev/heart keyboard
-- /top + refresh callback: ported
-- heart like/unlike callback: ported
-- /secret: ported with current ephemeral_message_parameters
+- /start, /myid, /id, /top, /secret, /mybot: ported
+- Rich Profile: Details + 50 photos + slideshow + fallback + buttons
+- heart like/unlike + Top refresh: ported
 - Guest Mode profile + Top: ported
-- external Bot-to-Bot continuation: ported as persistent 8-second state machine with base-first profile edit
-- /mybot + managed_bot lifecycle registration: ported manager-side
-- Managed child bot runtime: blocked pending a documented Serverless child-update routing/auth primitive; no polling loop or token persistence is used
-- /admin UI: not ported yet; its persistent state layer is ready
-- developer ID registry: intentionally empty until numeric IDs are supplied for Serverless
-- schema migration: not run from this environment
-- deployment/runtime tests: not run from this environment
+- external Bot-to-Bot: persistent state machine
+- /admin: fully ported, including texts, button, aliases, external settings and regex test
+- backup export/import: legacy-compatible JSON shape
+- handler error reporting: ported to Serverless wrappers
+- static validator: `npm test`
+- parity matrix: `docs/parity.md`
+- runtime checklist: `docs/runtime-tests.md`
+- developer IDs: intentionally manual in `lib/developer-access.js`
+- managed manager-side lifecycle: ported
+- managed child runtime: blocked pending a documented Serverless child-update/auth route; do not add polling
+- schema migration/live runtime tests: must be run from the linked local tgcloud project
 
 Update this status immediately when code changes make it stale.
