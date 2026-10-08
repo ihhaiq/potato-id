@@ -1,6 +1,6 @@
-import { registerManagedBot } from 'lib/managed-bots';
-import { reportHandlerError } from 'lib/errors';
-import { claimUpdate, releaseUpdate } from 'lib/request-guard';
+import { registerManagedBot } from '../lib/managed-bots.js';
+import { reportHandlerError } from '../lib/errors.js';
+import { claimUpdate, releaseUpdate } from '../lib/request-guard.js';
 
 export default async function (managedBotUpdated, ctx = {}) {
   const updateId = ctx?.update?.update_id;

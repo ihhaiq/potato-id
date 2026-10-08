@@ -1,6 +1,6 @@
 import { db } from 'sdk';
 import { asc, eq } from 'sdk/db';
-import { botSettings, commandAliases } from 'schema';
+import { botSettings, commandAliases } from '../schema.js';
 
 const SETTINGS_ID = 1;
 

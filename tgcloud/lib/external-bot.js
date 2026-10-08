@@ -1,9 +1,9 @@
 import { api, db } from 'sdk';
 import { eq, lt } from 'sdk/db';
-import { pendingExternalRequests } from 'schema';
-import { getConfig } from 'lib/config';
-import { editRichProfile, sendRichProfile } from 'lib/profile';
-import { fullName } from 'lib/usage';
+import { pendingExternalRequests } from '../schema.js';
+import { getConfig } from '../lib/config.js';
+import { editRichProfile, sendRichProfile } from '../lib/profile.js';
+import { fullName } from '../lib/usage.js';
 
 const EXTERNAL_REPLY_TTL_SECONDS = 8;
 

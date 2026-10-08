@@ -1,6 +1,6 @@
 import { api } from 'sdk';
-import { getConfig } from 'lib/config';
-import { fullName } from 'lib/usage';
+import { getConfig } from '../lib/config.js';
+import { fullName } from '../lib/usage.js';
 
 export function secretPromptKeyboard() {
   return {

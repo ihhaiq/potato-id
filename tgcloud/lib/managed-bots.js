@@ -1,7 +1,7 @@
 import { api, db } from 'sdk';
 import { eq } from 'sdk/db';
-import { managedBots } from 'schema';
-import { fullName } from 'lib/usage';
+import { managedBots } from '../schema.js';
+import { fullName } from '../lib/usage.js';
 
 function nowSeconds() {
   return Math.floor(Date.now() / 1000);

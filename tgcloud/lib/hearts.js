@@ -1,7 +1,7 @@
 import { db } from 'sdk';
 import { eq } from 'sdk/db';
-import { heartTargets, heartVotes } from 'schema';
-import { isDeveloper } from 'lib/developer-access';
+import { heartTargets, heartVotes } from '../schema.js';
+import { isDeveloper } from '../lib/developer-access.js';
 
 export const DEV_HEARTS_BOOST = 106;
 

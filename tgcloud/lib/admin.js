@@ -7,18 +7,18 @@ import {
   setSecretText,
   setWelcomeButton,
   setWelcomeText,
-} from 'lib/config';
+} from '../lib/config.js';
 import {
   clearAdminState,
   getAdminState,
   setAdminState,
-} from 'lib/admin-state';
-import { isDeveloper } from 'lib/developer-access';
+} from '../lib/admin-state.js';
+import { isDeveloper } from '../lib/developer-access.js';
 import {
   exportLegacyBackup,
   importLegacyBackup,
   normalizeLegacyBackup,
-} from 'lib/legacy-backup';
+} from '../lib/legacy-backup.js';
 
 const COMMAND_LABELS = Object.freeze({
   start: '/start',

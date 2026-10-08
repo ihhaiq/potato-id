@@ -1,6 +1,6 @@
 import { db } from 'sdk';
 import { and, eq, lt } from 'sdk/db';
-import { processedUpdates, requestWindows } from 'schema';
+import { processedUpdates, requestWindows } from '../schema.js';
 
 const IDEMPOTENCY_TTL_SECONDS = 15 * 60;
 

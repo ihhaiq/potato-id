@@ -1,6 +1,6 @@
 import { api, BotApiError } from 'sdk';
-import { heartCountFor } from 'lib/hearts';
-import { fullName, recordUsage } from 'lib/usage';
+import { heartCountFor } from '../lib/hearts.js';
+import { fullName, recordUsage } from '../lib/usage.js';
 
 const DEV_BUTTON_TEXT = 'Huge Dev';
 const DEV_BUTTON_URL = 'https://t.me/ihhai';

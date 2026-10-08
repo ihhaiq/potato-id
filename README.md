@@ -1,142 +1,45 @@
-# potato-id — Telegram Serverless
+# Potato ID — Telegram Serverless CLI 0.2
 
-فرع `serverless-cleanup` ينقل البوت من Python/Aiogram إلى Telegram Serverless JavaScript مع الحفاظ على سلوك `main` قدر ما تسمح المنصة.
+This is the **serverless-cleanup** development branch of [potato-id](https://github.com/ihhaiq/potato-id). The local folder may be named `Hugepfpbot`—the Telegram bot identity is set by BotFather CLI Access credentials, not by the repository or folder name.
 
-## قبل النشر
-
-افتح:
-
-`lib/developer-access.js`
-
-وحط ID حسابك الرقمي داخل:
-
-```js
-export const DEVELOPER_IDS = Object.freeze([123456789]);
-```
-
-تقدر تعرف ID حسابك من `/myid`.
-
-> لا تحط BOT_TOKEN أو أي token/secret داخل الملف. الـID الرقمي يستخدم لصلاحية `/admin` وdeveloper boosts وتنبيهات الأخطاء فقط.
-
-## الميزات المنقولة
-
-- `/start` + الكلمات المفتاحية.
-- `/myid`.
-- `/id` + الكلمات المفتاحية.
-- Rich Profile بنفس Details + معلومات المستخدم + slideshow.
-- حتى 50 صورة بروفايل باستخدام Telegram `file_id`.
-- fallback بدون صور عند منع الصور أو فشل صورة داخل Rich Message.
-- Huge Dev + عداد القلوب.
-- like / unlike لكل بروفايل.
-- `/top` + refresh + ترتيب usage وlikes.
-- developer boosts الحالية: hearts `+106` وusage `+2006`.
-- `/secret` باستخدام Ephemeral Messages الحالية.
-- Guest Mode للبروفايل وTop.
-- Bot-to-Bot external info عبر state machine دائم بالـDB.
-- `/mybot` + تسجيل lifecycle لتحديثات `managed_bot`.
-- `/admin` كامل:
-  - تعديل نص الترحيب.
-  - تعديل نص الرسالة المؤقتة.
-  - إضافة/تعديل/حذف زر الترحيب.
-  - إدارة aliases لـ`/start`, `/id`, `/secret`, `/top`.
-  - إعداد external bot: username / command / regex / label.
-  - اختبار regex.
-  - backup export/import.
-- backup بصيغة متوافقة مع الشكل القديم: `config + hearts + usage`.
-- throttling دائم بالـDB.
-- update idempotency.
-- developer error reporting.
-
-## التخزين
-
-Serverless ما يعتمد على ملفات JSON أو ذاكرة العملية كمصدر دائم.
-
-الجداول الرئيسية في `schema.js`:
-
-- `bot_settings`
-- `command_aliases`
-- `heart_targets`
-- `heart_votes`
-- `usage_users`
-- `admin_states`
-- `pending_external_requests`
-- `managed_bots`
-- `processed_updates`
-- `request_windows`
-
-الفرع نفسه لا يحتوي Python runtime ولا ملفات JSON state قديمة. مرجع السلوك التاريخي هو `main` فقط.
-
-## Managed Bots
-
-الجزء manager-side منقول: إنشاء الرابط، استقبال `managed_bot` وتخزين bot ID/owner/username.
-
-**الـchild runtime نفسه مو مزيف داخل Serverless.** النسخة القديمة تشغل `getUpdates` worker مستقل لكل child bot، بينما Telegram Serverless ما يوفر بالوثائق الحالية مسارًا مثبتًا لاستقبال تحديثات child bot داخل نفس مشروع manager. لذلك ماكو polling دائم وماكو تخزين managed-bot tokens داخل DB.
-
-راجع `docs/parity.md` و`docs/serverless.md`.
-
-## الفحص والنشر
-
-```bash
-npm install
-npm test
-
-npx tgcloud --version
-npx tgcloud status
-npx tgcloud diff
-npx tgcloud push
-```
-
-إذا `schema.js` يحتوي تغييرات غير مطبقة:
-
-```bash
-npx tgcloud migrate
-```
-
-بعدها:
-
-```bash
-npx tgcloud webhook
-```
-
-راجع `docs/runtime-tests.md` لاختبار الأوامر والـcallbacks بعد النشر.
-
-## الملفات الأساسية
+## Project layout
 
 ```text
-schema.js
-handlers/
-  message.js
-  callback_query.js
-  guest_message.js
-  managed_bot.js
-lib/
-  admin.js
-  admin-state.js
-  config.js
-  developer-access.js
-  errors.js
-  external-bot.js
-  hearts.js
-  legacy-backup.js
-  managed-bots.js
-  profile.js
-  request-guard.js
-  secret.js
-  top.js
-  usage.js
-  welcome.js
-scripts/
-  validate-serverless.mjs
-docs/
-  serverless.md
-  parity.md
-  runtime-tests.md
+Hugepfpbot/
+  tgcloud.jsonc
+  package.json
+  tgcloud/
+    schema.js
+    handlers/
+    lib/
+  scripts/
+  docs/
 ```
 
-## أمان
+The CLI deploys only code in `tgcloud/`. All local runtime imports use relative `.js` paths. **Never commit `.tgcloud/` or bot tokens.**
 
-- لا ترفع `.tgcloud/`.
-- لا ترفع bot token أو managed-bot token.
-- الـbackup العادي لا يحتوي managed-bot tokens.
-- لا تحول child bots إلى polling loops داخل Serverless.
-- لا تعتمد على process globals أو filesystem كحالة دائمة.
+## Set up on a new Windows PC
+
+Run these in PowerShell after installing Git and Node.js:
+
+```powershell
+cd "$HOME\Desktop"
+git clone --branch serverless-cleanup https://github.com/ihhaiq/potato-id.git Hugepfpbot
+cd Hugepfpbot
+npm.cmd install
+npm.cmd test
+npx.cmd tgcloud login
+npx.cmd tgcloud status
+npx.cmd tgcloud diff
+```
+
+Use the CLI Access token **for the intended existing Telegram bot** from BotFather → Serverless → CLI Access. Verify the app ID printed by login. Do not copy old `.tgcloud` credentials or the empty scaffold code into this checkout.
+
+## Before production deployment
+
+1. Configure developer IDs in `tgcloud/lib/developer-access.js` (no secrets).
+2. Confirm `npm test` succeeds and inspect `npx tgcloud status` / `npx tgcloud diff`.
+3. Inspect `npx tgcloud migrate --dry-run` and ensure changes won't remove existing cloud tables/data.
+4. Only after review, run `npx tgcloud push`, apply required migration, and inspect `npx tgcloud webhook`.
+
+Do not use `reset`, `push --force`, or destructive migrations for initial setup. Static validation does **not** prove live runtime correctness. Managed child bot execution remains an unresolved runtime constraint; see `docs/serverless.md`.

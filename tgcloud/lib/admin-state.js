@@ -1,6 +1,6 @@
 import { db } from 'sdk';
 import { eq, lt } from 'sdk/db';
-import { adminStates } from 'schema';
+import { adminStates } from '../schema.js';
 
 export const ADMIN_STATE_TTL_SECONDS = 2 * 60 * 60;
 

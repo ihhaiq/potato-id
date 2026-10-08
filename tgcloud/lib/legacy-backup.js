@@ -1,6 +1,6 @@
 import { db } from 'sdk';
-import { botSettings, commandAliases, heartTargets, heartVotes, usageUsers } from 'schema';
-import { getConfig, seededEffectiveConfig } from 'lib/config';
+import { botSettings, commandAliases, heartTargets, heartVotes, usageUsers } from '../schema.js';
+import { getConfig, seededEffectiveConfig } from '../lib/config.js';
 
 function nowSeconds() {
   return Math.floor(Date.now() / 1000);

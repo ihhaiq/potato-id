@@ -1,5 +1,5 @@
 import { api } from 'sdk';
-import { primaryDeveloperId } from 'lib/developer-access';
+import { primaryDeveloperId } from '../lib/developer-access.js';
 
 function clip(value, limit = 600) {
   const text = String(value ?? '');

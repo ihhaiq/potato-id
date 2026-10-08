@@ -1,9 +1,9 @@
 import { api } from 'sdk';
-import { reportHandlerError } from 'lib/errors';
-import { commandMatchesAlias } from 'lib/config';
-import { answerGuestProfile } from 'lib/profile';
-import { buildTopUsersRichMessage, topKeyboard } from 'lib/top';
-import { claimUpdate, releaseUpdate } from 'lib/request-guard';
+import { reportHandlerError } from '../lib/errors.js';
+import { commandMatchesAlias } from '../lib/config.js';
+import { answerGuestProfile } from '../lib/profile.js';
+import { buildTopUsersRichMessage, topKeyboard } from '../lib/top.js';
+import { claimUpdate, releaseUpdate } from '../lib/request-guard.js';
 
 async function botUsername() {
   const me = await api.getMe();

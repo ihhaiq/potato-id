@@ -1,0 +1,4 @@
+{
+  // Potato ID Telegram Serverless CLI 0.2
+  "$schema": "./node_modules/@tgcloud/cli/schema/tgcloud.json"
+}

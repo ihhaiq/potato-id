@@ -1,9 +1,9 @@
 import { api, db } from 'sdk';
 import { desc, sql } from 'sdk/db';
-import { usageUsers } from 'schema';
-import { DEV_HEARTS_BOOST } from 'lib/hearts';
-import { DEV_USAGE_BOOST } from 'lib/usage';
-import { isDeveloper } from 'lib/developer-access';
+import { usageUsers } from '../schema.js';
+import { DEV_HEARTS_BOOST } from '../lib/hearts.js';
+import { DEV_USAGE_BOOST } from '../lib/usage.js';
+import { isDeveloper } from '../lib/developer-access.js';
 
 export const TOP_LIST_LIMIT = 56;
 

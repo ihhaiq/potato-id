@@ -1,15 +1,15 @@
 import { api, BotApiError } from 'sdk';
-import { reportHandlerError } from 'lib/errors';
-import { handleAdminCallback } from 'lib/admin';
-import { profileKeyboard } from 'lib/profile';
-import { toggleHeart } from 'lib/hearts';
-import { sendSecretForCallback } from 'lib/secret';
-import { buildTopUsersRichMessage, topKeyboard } from 'lib/top';
+import { reportHandlerError } from '../lib/errors.js';
+import { handleAdminCallback } from '../lib/admin.js';
+import { profileKeyboard } from '../lib/profile.js';
+import { toggleHeart } from '../lib/hearts.js';
+import { sendSecretForCallback } from '../lib/secret.js';
+import { buildTopUsersRichMessage, topKeyboard } from '../lib/top.js';
 import {
   allowCallbackRequest,
   claimUpdate,
   releaseUpdate,
-} from 'lib/request-guard';
+} from '../lib/request-guard.js';
 
 function descriptionOf(error) {
   return String(error?.description || error?.message || error || '').toLocaleLowerCase();

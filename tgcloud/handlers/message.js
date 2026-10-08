@@ -1,16 +1,16 @@
 import { api } from 'sdk';
-import { reportHandlerError } from 'lib/errors';
-import { handleAdminMessage } from 'lib/admin';
-import { commandMatchesAlias } from 'lib/config';
+import { reportHandlerError } from '../lib/errors.js';
+import { handleAdminMessage } from '../lib/admin.js';
+import { commandMatchesAlias } from '../lib/config.js';
 import {
   handleExternalBotMessage,
   sendProfileWithExternalLookup,
-} from 'lib/external-bot';
-import { sendMyBot } from 'lib/managed-bots';
-import { claimUpdate, allowMessageRequest, releaseUpdate } from 'lib/request-guard';
-import { sendSecretPrompt } from 'lib/secret';
-import { sendTopUsers } from 'lib/top';
-import { sendWelcome } from 'lib/welcome';
+} from '../lib/external-bot.js';
+import { sendMyBot } from '../lib/managed-bots.js';
+import { claimUpdate, allowMessageRequest, releaseUpdate } from '../lib/request-guard.js';
+import { sendSecretPrompt } from '../lib/secret.js';
+import { sendTopUsers } from '../lib/top.js';
+import { sendWelcome } from '../lib/welcome.js';
 
 function commandName(text) {
   if (typeof text !== 'string') return '';

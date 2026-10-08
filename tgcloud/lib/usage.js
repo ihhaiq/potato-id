@@ -1,7 +1,7 @@
 import { db } from 'sdk';
 import { eq, sql } from 'sdk/db';
-import { usageUsers } from 'schema';
-import { isDeveloper } from 'lib/developer-access';
+import { usageUsers } from '../schema.js';
+import { isDeveloper } from '../lib/developer-access.js';
 
 export const DEV_USAGE_BOOST = 2006;
 

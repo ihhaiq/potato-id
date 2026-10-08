@@ -1,5 +1,5 @@
 import { api } from 'sdk';
-import { getConfig } from 'lib/config';
+import { getConfig } from '../lib/config.js';
 
 export async function welcomeKeyboard(config = null) {
   const resolved = config || await getConfig();

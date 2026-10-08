@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const root = process.cwd();
+const root = path.join(process.cwd(), 'tgcloud');
 const deployable = ['schema.js'];
 for (const dir of ['lib', 'handlers']) {
   const abs = path.join(root, dir);
@@ -39,13 +39,13 @@ for (const file of deployable) {
     if (source.includes(term)) failures.push(file + ': forbidden runtime dependency: ' + term);
   }
 
-  if (/from\s+['"]\.\.?\//.test(source)) {
-    failures.push(file + ': relative runtime import found');
-  }
+  // CLI 0.2 uses relative .js imports for project modules.
 
   for (const match of source.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
     const spec = match[1];
-    if (!allowedSdk.has(spec) && !modules.has(spec)) {
+    const resolved = spec.startsWith('.') ? path.posix.normalize(path.posix.join(path.posix.dirname(file), spec)).replace(/\.js$/, '') : spec;
+    if (spec.startsWith('.') && !spec.endsWith('.js')) failures.push(file + ': local import requires .js: ' + spec);
+    if (!allowedSdk.has(spec) && !modules.has(resolved)) {
       failures.push(file + ': unresolved runtime import ' + spec);
     }
   }
