@@ -1,0 +1,18 @@
+name: Verify Telegram Serverless source
+on:
+  push:
+    branches: [serverless-cleanup]
+  pull_request:
+    branches: [serverless-cleanup]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - run: npm test
