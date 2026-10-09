@@ -6,7 +6,7 @@ import {
   handleExternalBotMessage,
   sendProfileWithExternalLookup,
 } from '../lib/external-bot.js';
-import { sendMyBot, registerManagedBot } from '../lib/managed-bots.js';
+import { sendMyBot, registerManagedBot, checkManagedBotToken } from '../lib/managed-bots.js';
 import { claimUpdate, allowMessageRequest, releaseUpdate } from '../lib/request-guard.js';
 import { sendSecretPrompt } from '../lib/secret.js';
 import { sendTopUsers } from '../lib/top.js';
@@ -85,6 +85,11 @@ export default async function (message, ctx = {}) {
 
     if (await matchesCommandOrAlias(text, 'secret')) {
       await sendSecretPrompt(message);
+      return;
+    }
+
+    if (matchesCommand(text, 'childcheck')) {
+      await checkManagedBotToken(message);
       return;
     }
 
