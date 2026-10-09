@@ -129,3 +129,41 @@ export async function registerManagedBot(update) {
     ownerChanged,
   };
 }
+
+/**
+ * Owner-only, read-only probe. Never logs, stores or echoes a child bot token.
+ * This checks manager authorization, NOT child update delivery.
+ */
+export async function checkManagedBotToken(message) {
+  const ownerId = Number(message?.from?.id);
+  const chatId = Number(message?.chat?.id);
+  if (!Number.isSafeInteger(ownerId) || chatId !== ownerId) return;
+  const existing = await findManagedBotByOwner(ownerId);
+  if (!existing) {
+    await api.sendMessage({ chat_id: chatId, text: 'ماكو بوت مُدار مسجّل باسم حسابك.' });
+    return;
+  }
+  try {
+    const result = await api.getManagedBotToken({ user_id: Number(existing.botId) });
+    const token = typeof result === 'string' ? result : result?.token;
+    if (typeof token !== 'string' || !/^\d+:[A-Za-z0-9_-]+$/.test(token)) {
+      throw new Error('Unexpected token response from Bot API');
+    }
+    await api.sendMessage({
+      chat_id: chatId,
+      text: '✅ صلاحية المدير لاسترجاع توكن البوت المُدار تعمل.\n'
+        + 'البوت: @' + (existing.username || '؟') + '\n'
+        + 'معرّف البوت: ' + existing.botId + '\n'
+        + 'لكن استقبال رسائل البوت الفرعي غير مفعّل بعد.',
+    });
+  } catch (error) {
+    // Avoid printing potentially sensitive Bot API response contents.
+    console.error('Managed-bot token probe failed', {
+      botId: Number(existing.botId), errorType: String(error?.name || 'Error'),
+    });
+    await api.sendMessage({
+      chat_id: chatId,
+      text: '❌ فشل اختبار صلاحية البوت المُدار. راجع صلاحية المدير وطريقة getManagedBotToken في CLI.',
+    });
+  }
+}
