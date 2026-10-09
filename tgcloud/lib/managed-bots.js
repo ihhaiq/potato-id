@@ -29,9 +29,9 @@ export async function sendMyBot(message) {
     return api.sendMessage({
       chat_id: chatId,
       text:
-        '❤️ عندك بوت خاص فيك بالفعل: @' + (existing.username || '؟') + '\n'
-        + 'البوت مسجل عند المدير، لكن child updates على Telegram Serverless '
-        + 'بعدها تحتاج مسار رسمي مثبت قبل تشغيل /id و/secret عليه.',
+        '🤖 البوت المسجّل عند المدير: @' + (existing.username || '؟') + '\n'
+        + 'حالة التشغيل: ' + (existing.status || 'غير معروفة') + '\n'
+        + 'التسجيل لا يعني أن استقبال رسائل البوت الفرعي مفعّل.',
     });
   }
 
@@ -104,15 +104,16 @@ export async function registerManagedBot(update) {
   // We intentionally don't persist getManagedBotToken() output in the
   // Serverless database. The token is a secret and can be fetched again by the
   // manager when a proven child-runtime routing mechanism needs it.
-  if (isNew || ownerChanged) {
+  // Acknowledge every delivered lifecycle event, including duplicates/token updates.
+  // This makes it possible to distinguish webhook delivery from child runtime availability.
+  {
     try {
       await api.sendMessage({
         chat_id: ownerId,
         text:
-          '✅ صار عندك بوت خاص فيك: @' + (botUser?.username || '؟') + '\n\n'
-          + 'تم تسجيله عند البوت المدير. تشغيل تحديثات البوت الفرعي داخل Telegram '
-          + 'Serverless يعتمد على مسار child-update رسمي؛ ما راح نشغل polling دائم '
-          + 'أو نخزن التوكن كحل وهمي.',
+          '✅ استلم المدير حدث البوت المُدار: @' + (botUser?.username || '؟') + '\n'
+          + 'معرّف البوت: ' + botId + '\n'
+          + 'حالة التشغيل: pending_runtime — البوت لم يُفعّل لاستقبال الرسائل بعد.',
       });
     } catch (error) {
       console.error('Could not notify managed bot owner', { ownerId, botId, message: String(error?.message || error) });
