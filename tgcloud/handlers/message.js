@@ -6,7 +6,7 @@ import {
   handleExternalBotMessage,
   sendProfileWithExternalLookup,
 } from '../lib/external-bot.js';
-import { sendMyBot } from '../lib/managed-bots.js';
+import { sendMyBot, registerManagedBot } from '../lib/managed-bots.js';
 import { claimUpdate, allowMessageRequest, releaseUpdate } from '../lib/request-guard.js';
 import { sendSecretPrompt } from '../lib/secret.js';
 import { sendTopUsers } from '../lib/top.js';
@@ -44,6 +44,13 @@ export default async function (message, ctx = {}) {
 
   try {
     if (!await allowMessageRequest(message)) return;
+
+    // A creation service message can arrive independently of managed_bot updates.
+    if (message?.managed_bot_created?.bot) {
+      console.log('managed_bot_created received', { botId: message.managed_bot_created.bot.id, ownerId: message.from?.id });
+      await registerManagedBot({ user: message.from, bot: message.managed_bot_created.bot });
+      return;
+    }
 
     if (await handleAdminMessage(message)) return;
 
