@@ -88,7 +88,7 @@ export async function registerManagedBot(update) {
     botId,
     ownerId,
     username: botUser?.username || null,
-    status: 'active',
+    status: 'pending_runtime',
     createdAt: stamp,
     updatedAt: stamp,
   }).onConflictDoUpdate({
@@ -96,7 +96,7 @@ export async function registerManagedBot(update) {
     set: {
       ownerId,
       username: botUser?.username || null,
-      status: 'active',
+      status: 'pending_runtime',
       updatedAt: stamp,
     },
   }).run();
@@ -115,10 +115,11 @@ export async function registerManagedBot(update) {
           + 'أو نخزن التوكن كحل وهمي.',
       });
     } catch (error) {
-      console.warn('Could not notify managed bot owner', error);
+      console.error('Could not notify managed bot owner', { ownerId, botId, message: String(error?.message || error) });
     }
   }
 
+  console.log('Managed bot registered (runtime pending)', { botId, ownerId, isNew, ownerChanged });
   return {
     botId,
     ownerId,
