@@ -7,6 +7,10 @@ export default async function (managedBotUpdated, ctx = {}) {
   if (!await claimUpdate(updateId)) return;
 
   try {
+    console.log('managed_bot update received', {
+      botId: managedBotUpdated?.bot?.id,
+      ownerId: managedBotUpdated?.user?.id,
+    });
     await registerManagedBot(managedBotUpdated);
   } catch (error) {
     await releaseUpdate(updateId);
